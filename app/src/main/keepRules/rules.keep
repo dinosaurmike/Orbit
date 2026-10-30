@@ -1,0 +1,15 @@
+# R8 keep rules: published (release) builds shrink and rename code to make the app smaller.
+# AGP combines all keep rule files in src/main/keepRules and passes them to R8.
+# For more details, see https://d.android.com/r/tools/r8/keep-rules
+
+# Vosk (wake word) talks to its native speech engine through JNA, which finds classes and
+# methods by name at runtime, so they must keep their names
+-keep class com.sun.jna.** { *; }
+-keep class * implements com.sun.jna.** { *; }
+-keep class org.vosk.** { *; }
+-dontwarn java.awt.**
+
+# MediaPipe (hand gestures, knowing who's who) calls into its native code by name
+-keep class com.google.mediapipe.** { *; }
+-keep class com.google.protobuf.** { *; }
+-dontwarn com.google.mediapipe.**

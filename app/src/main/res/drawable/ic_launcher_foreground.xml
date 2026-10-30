@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App icon: Orbit's two holographic eyes. Cyan and magenta copies sit just off each
+     white ring, like the chromatic-aberration fringes on screen. Everything stays inside
+     the icon's safe zone (the middle 66 of 108 units) so no launcher shape cuts it off. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#00F0FF"
+        android:strokeAlpha="0.9"
+        android:strokeWidth="3.2"
+        android:pathData="M33.60,53.40 a8.5,8.5 0 1,0 17.0,0 a8.5,8.5 0 1,0 -17.0,0" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF2BD6"
+        android:strokeAlpha="0.9"
+        android:strokeWidth="3.2"
+        android:pathData="M35.40,54.60 a8.5,8.5 0 1,0 17.0,0 a8.5,8.5 0 1,0 -17.0,0" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="1.0"
+        android:strokeWidth="2.4"
+        android:pathData="M34.50,54.00 a8.5,8.5 0 1,0 17.0,0 a8.5,8.5 0 1,0 -17.0,0" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#00F0FF"
+        android:strokeAlpha="0.9"
+        android:strokeWidth="3.2"
+        android:pathData="M55.60,53.40 a8.5,8.5 0 1,0 17.0,0 a8.5,8.5 0 1,0 -17.0,0" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF2BD6"
+        android:strokeAlpha="0.9"
+        android:strokeWidth="3.2"
+        android:pathData="M57.40,54.60 a8.5,8.5 0 1,0 17.0,0 a8.5,8.5 0 1,0 -17.0,0" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="1.0"
+        android:strokeWidth="2.4"
+        android:pathData="M56.50,54.00 a8.5,8.5 0 1,0 17.0,0 a8.5,8.5 0 1,0 -17.0,0" />
+</vector>
