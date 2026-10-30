@@ -1,0 +1,17 @@
+# Android Studio / Gradle
+*.iml
+.gradle/
+.kotlin/
+.idea/
+.DS_Store
+build/
+/captures
+.externalNativeBuild
+.cxx
+
+# Private: never upload
+local.properties
+CLAUDE.local.md
+*.jks
+*.keystore
+keystore.properties
