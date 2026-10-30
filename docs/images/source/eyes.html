@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#000}canvas{display:block}</style></head><body>
+<canvas id="c"></canvas>
+<script>
+const P = new URLSearchParams(location.search);
+const W = +P.get('w'), H = +P.get('h'), mode = P.get('mode');
+const c = document.getElementById('c'); c.width = W; c.height = H;
+const g = c.getContext('2d');
+g.fillStyle = '#000'; g.fillRect(0,0,W,H);
+// soft vignette glow behind
+const bg = g.createRadialGradient(W*0.5,H*0.5,0,W*0.5,H*0.5,W*0.6);
+bg.addColorStop(0,'rgba(20,40,60,0.55)'); bg.addColorStop(1,'rgba(0,0,0,0)');
+g.fillStyle = bg; g.fillRect(0,0,W,H);
+function ring(x,y,r,color,width,alpha,blur){
+  g.save(); g.globalCompositeOperation='lighter'; g.globalAlpha=alpha;
+  g.strokeStyle=color; g.lineWidth=width; if(blur){g.shadowColor=color; g.shadowBlur=blur;}
+  g.beginPath(); g.ellipse(x,y,r,r,0,0,Math.PI*2); g.stroke(); g.restore();
+}
+function eye(x,y,r){
+  const w = r*0.26;
+  ring(x,y,r,'#5ce1ff',w*2.6,0.10,r*0.6);       // big soft glow
+  ring(x-w*0.22,y-w*0.12,r,'#00f0ff',w,0.75,w*0.8); // cyan fringe
+  ring(x+w*0.22,y+w*0.12,r,'#ff2bd6',w,0.65,w*0.8); // magenta fringe
+  ring(x,y,r,'#ffffff',w*0.7,1,w*0.5);              // white core
+  // a pastel sheen arc
+  g.save(); g.globalCompositeOperation='lighter'; g.globalAlpha=0.35;
+  g.strokeStyle='#b794ff'; g.lineWidth=w*0.5; g.beginPath(); g.arc(x,y,r,-2.4,-1.4); g.stroke(); g.restore();
+}
+let ex, ey, er;
+if (mode==='header'){ ex=W*0.27; ey=H*0.5; er=H*0.13; }
+else { ex=W*0.27; ey=H*0.5; er=H*0.13; }
+eye(ex-er*1.7, ey, er); eye(ex+er*1.7, ey, er);
+// scan lines
+g.fillStyle='rgba(0,0,0,0.35)';
+for(let yy=0; yy<H; yy+=4){ g.fillRect(0,yy,W,1.4); }
+// text
+g.fillStyle='#f2f4f7'; g.textBaseline='middle';
+const tx = W*0.53;
+g.font = `600 ${Math.round(H*0.17)}px "Inter","Helvetica Neue",Arial,sans-serif`;
+g.fillText('Orbit', tx, ey - H*0.09);
+g.fillStyle='#8a93a3';
+g.font = `400 ${Math.round(H*0.042)}px "Inter","Helvetica Neue",Arial,sans-serif`;
+const lines = mode==='header'
+  ? ['An open-source AI desk companion.','An old Android phone becomes its face.']
+  : ['Your old phone, reborn as a','friendly AI desk companion.'];
+lines.forEach((l,i)=>g.fillText(l, tx+4, ey + H*0.06 + i*H*0.062));
+</script></body></html>
