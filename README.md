@@ -1,6 +1,6 @@
 # Orbit
 
-![Orbit: an open-source AI desk companion](docs/images/orbit-header.png)
+![Orbit: an open-source AI desk companion](docs/images/orbit-header.gif)
 
 **An open-source AI desk companion. An old Android phone becomes its face.**
 
