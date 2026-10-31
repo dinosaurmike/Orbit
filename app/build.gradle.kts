@@ -19,11 +19,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.companion2"
+        // The app's permanent identity on Android (never change it after release: updates must match)
+        applicationId = "io.github.dinosaurmike.orbit"
         minSdk = 28
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 1          // raise by 1 for every release
+        versionName = "0.1.0"    // what people see
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -37,9 +38,10 @@ android {
         release {
             // Published builds never contain a key: people enter their own in settings
             buildConfigField("String", "GEMINI_API_KEY", "\"\"")
+            // Code shrinking is off: shrinking only part of the app (Kotlin + AndroidX) made OkHttp
+            // crash at start-up (IllegalAccessError on a renamed kotlin.text class) in 0.1.0
             optimization {
-                enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
+                enable = false
             }
         }
     }
