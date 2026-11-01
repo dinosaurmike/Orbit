@@ -345,9 +345,10 @@ class GeminiLive(
             // Without interrupting, don't send while it talks (so it can't hear itself)
             if (!settings.allowInterrupt) return
         } else if (level > settings.voiceThreshold) {
+            // Loud enough to be a voice: the eyes look attentive. But a loud sound alone (a fan,
+            // a clatter, the neck's own motors) isn't you talking: it only counts as talking, and
+            // it only waits for a reply, once Gemini says it heard words (see inputTranscription).
             lastHeard = now
-            lastActivity = now
-            waitingForReply = true
         }
         // Nobody's said anything for a while: end the conversation to save your free allowance
         if (now - lastActivity > settings.quietTimeout * 1000) {
@@ -820,7 +821,8 @@ class GeminiLive(
         // Ask for a text copy of what it says, for captions
         setup.put("outputAudioTranscription", JSONObject())
         // ...and of what you say, for the conversation diary
-        if (settings.memoryOn && settings.diaryOn) setup.put("inputAudioTranscription", JSONObject())
+        // Always on: it's how Orbit tells your words from a noise (only kept if the diary is on)
+        setup.put("inputAudioTranscription", JSONObject())
         return JSONObject().put("setup", setup).toString()
     }
 
@@ -1055,7 +1057,13 @@ class GeminiLive(
             speaker.stop()
             replyFinished = true
         }
-        content.optJSONObject("inputTranscription")?.optString("text")?.let { addToTranscript("Them", it) }
+        content.optJSONObject("inputTranscription")?.optString("text")?.let { words ->
+            addToTranscript("Them", words)
+            if (words.isNotBlank()) {  // real words, not just a noise: now it waits for the reply
+                lastActivity = System.currentTimeMillis()
+                if (!speaker.busy()) waitingForReply = true
+            }
+        }
         content.optJSONObject("outputTranscription")?.optString("text")?.let { words ->
             addToTranscript("Orbit", words)
             if (replyFinished) caption = ""

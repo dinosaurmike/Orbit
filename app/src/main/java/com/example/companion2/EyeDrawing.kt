@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -205,32 +204,27 @@ fun DrawScope.drawHoloEye(
 }
 
 // CRT look: dark lines across the whole picture, `spacing` pixels apart. `thickness` is how
-// much of each stripe is dark. The lit band between lines fades softly at its edges, like a
-// CRT's glowing beam, which shows as rounded edges once the lines are fat. Drawn as one
-// repeating gradient, so it costs almost nothing.
-// The spacing is rounded to whole screen pixels: with a fraction (say 2.7 px) the stripes
-// drift against the pixel grid and add up to a wide, faint dark bar (a moiré band).
+// much of each stripe is dark, with a soft edge either side (like a CRT's glowing beam).
+// Each line is drawn as its own pair of rectangles at an exact pixel position. (It used to be one
+// repeating gradient, but phone GPUs work that out in low precision: partway down the screen the
+// stripes changed pattern, which showed as a faint dark box over the eyes.) The spacing is rounded
+// to whole pixels too, so every stripe lands on the pixel grid the same way (no moiré bands).
 fun DrawScope.drawScanLines(spacing: Float, thickness: Float) {
     val step = Math.round(spacing).coerceAtLeast(2).toFloat()
-    val dark = Color.Black.copy(alpha = 0.8f)
-    val half = Color.Black.copy(alpha = 0.3f)
-    val edge = thickness.coerceIn(0.05f, 0.9f) / 2f  // dark part on each side of the stripe
-    val fade = minOf(0.12f, (1f - 2f * edge) / 3f)   // width of the soft, rounded edge
-    drawRect(
-        Brush.verticalGradient(
-            0f to dark,
-            edge to dark,
-            edge + fade * 0.5f to half,
-            edge + fade to Color.Transparent,
-            1f - edge - fade to Color.Transparent,
-            1f - edge - fade * 0.5f to half,
-            1f - edge to dark,
-            1f to dark,
-            startY = 0f,
-            endY = step,
-            tileMode = TileMode.Repeated
-        )
-    )
+    val edge = thickness.coerceIn(0.05f, 0.9f) / 2f   // dark part on each side of a line, as a share of the step
+    val fade = minOf(0.12f, (1f - 2f * edge) / 3f)     // the soft edge, as a share of the step
+    val dark = edge * step
+    val soft = dark + fade * step
+    // The soft band underneath, then the dark core on top (together 80% dark in the middle)
+    val softColor = Color.Black.copy(alpha = 0.3f)
+    val darkColor = Color.Black.copy(alpha = 0.714f)
+    val w = size.width
+    var y = 0f
+    while (y < size.height + step) {
+        drawRect(softColor, Offset(0f, y - soft), Size(w, soft * 2f))
+        drawRect(darkColor, Offset(0f, y - dark), Size(w, dark * 2f))
+        y += step
+    }
 }
 
 // Countdown ring: a thin ring around the eye that drains as a timer or reminder runs down.
