@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1 (unreleased)
+
+- Fixed: a faint dark box could show across the top of the eyes. The CRT scan lines are now drawn
+  line by line at exact pixel positions instead of as one repeating gradient, which some phone GPUs
+  draw in low precision.
+- Fixed: during a conversation, a loud noise (a fan, a clatter, the neck's own motors) made Orbit
+  "think": the eyes and head swung up and to the right for a few seconds, over and over, and the
+  conversation never timed out. Now it only waits for a reply once Gemini has heard actual words.
+
 ## 0.1.0 (first public release, unreleased)
 
 First release of Orbit: holographic eyes that follow you, Gemini Live voice conversation with
