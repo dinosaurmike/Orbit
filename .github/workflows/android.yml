@@ -1,0 +1,45 @@
+# Builds the Orbit Android app (debug APK) on every push and pull request.
+# The green "Android build" badge in the README comes from this workflow.
+name: Android build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**', 'desk/**', 'neck/**.md']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # No API key is needed: debug builds read GEMINI_API_KEY from local.properties only if it exists.
+      - name: Build debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: orbit-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 14
