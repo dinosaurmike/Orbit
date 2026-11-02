@@ -2,6 +2,10 @@
 
 ![Orbit: an open-source AI desk companion](docs/images/orbit-header.gif)
 
+[![Android build](https://github.com/dinosaurmike/Orbit/actions/workflows/android.yml/badge.svg)](https://github.com/dinosaurmike/Orbit/actions/workflows/android.yml)
+[![Latest release](https://img.shields.io/github/v/release/dinosaurmike/Orbit)](https://github.com/dinosaurmike/Orbit/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 **An open-source AI desk companion. An old Android phone becomes its face.**
 
 Orbit is a pair of glowing holographic eyes living on a phone on your desk. It watches you when
@@ -12,6 +16,33 @@ physically turns to look at you.
 
 No subscription. No company servers. If this project vanished tomorrow, your Orbit would keep
 working.
+
+## How it works
+
+```mermaid
+flowchart LR
+  phone["<b>Android phone</b><br/>Kotlin app<br/>eyes · face tracking<br/>wake word · memory"]
+  gem["<b>Gemini Live API</b><br/>speech in, voice out,<br/>tool calls"]
+  esp["<b>ESP32 neck</b><br/>Bluetooth LE peripheral"]
+  servo["<b>Pan / tilt servos</b>"]
+  phone <-- "WebSocket: mic 16 kHz up, voice 24 kHz down" --> gem
+  phone -- "BLE: M pan tilt, ~30/s" --> esp
+  esp -- "eased PWM" --> servo
+```
+
+- **The phone does everything it can locally.** Face tracking (ML Kit), the wake word (Vosk), the eyes,
+  memory, timers and reminders all run on the phone. Camera images never leave it unless you ask Orbit
+  to look at something.
+- **Gemini Live is the voice.** Each conversation is one WebSocket to the Gemini Live API: microphone
+  audio streams up at 16 kHz and Orbit's voice streams back at 24 kHz, so you can interrupt it. Gemini
+  calls the app's tools to change its expression, set timers and reminders, check the weather
+  (Open-Meteo), search the web, take a photo or turn to look at your screen.
+- **The neck is a tiny Bluetooth LE peripheral.** The phone turns your face position into servo angles
+  and sends short text lines (`M <pan> <tilt>`, about 30 a second while moving). The ESP32 eases each
+  move (35% of the gap every 20 ms, at most 220°/s) and drives two hobby servos. Any BLE gadget that
+  speaks the [neck protocol](docs/NECK_PROTOCOL.md) can be Orbit's body.
+- **No Orbit servers.** Your phone talks straight to Google with your own key; there is no backend to
+  shut down.
 
 ## What it does
 
