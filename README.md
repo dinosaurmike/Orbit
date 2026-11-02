@@ -17,6 +17,8 @@ physically turns to look at you.
 No subscription. No company servers. If this project vanished tomorrow, your Orbit would keep
 working.
 
+[![Watch Orbit in action on YouTube](docs/images/orbit-video.jpg)](https://youtu.be/iJuS2ayV5mY)
+
 ## How it works
 
 ```mermaid
