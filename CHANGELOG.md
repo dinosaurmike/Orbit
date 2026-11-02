@@ -8,6 +8,15 @@
 - Fixed: during a conversation, a loud noise (a fan, a clatter, the neck's own motors) made Orbit
   "think": the eyes and head swung up and to the right for a few seconds, over and over, and the
   conversation never timed out. Now it only waits for a reply once Gemini has heard actual words.
+- Fixed: with the neck, the head hunted back and forth during conversations. It remembered where
+  the head pointed without its gestures (bobbing as it talks, glancing up while it thinks), so each
+  gesture looked like you'd moved. It now remembers the real pose, and ignores pictures taken while
+  the head is swinging fast.
+- Calmer conversations: the eyes only glance up to "think" when Gemini takes more than about a
+  second to answer, and the glance is smaller. Quick replies keep the eyes on you instead of flicking
+  up and back on every turn. The head no longer joins in; it stays on you.
+- Homework that fails (for example when Gemini's free daily limit is used up) now waits three hours
+  before trying again, instead of retrying every 30 seconds.
 
 ## 0.1.0 (first public release, unreleased)
 
