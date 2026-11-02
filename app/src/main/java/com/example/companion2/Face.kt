@@ -560,8 +560,13 @@ fun Face(
         var sleepX = 0f  // asleep: where the closed eyes drift, slowly
         var sleepY = 0.3f
         var sleepStep = 0L
+        var thinkingSince = 0L  // when it started waiting on Gemini's reply
         while (true) {
             val clock = System.currentTimeMillis()
+            // Only a slow reply gets the "pondering" look: Gemini usually answers within a second,
+            // and flicking up and straight back on every turn looked like a twitch
+            if (mood == Mood.THINKING) { if (thinkingSince == 0L) thinkingSince = clock } else thinkingSince = 0L
+            val pondering = thinkingSince != 0L && clock - thinkingSince > PONDER_AFTER_MS
             if (clock >= nextSaccade) {
                 saccade = if (settings.habits) {
                     (Random.nextFloat() - 0.5f) * 0.06f to (Random.nextFloat() - 0.5f) * 0.05f
@@ -571,7 +576,7 @@ fun Face(
             val override = expressionLook
             val target: Pair<Float, Float>? = when {
                 override != null -> override
-                mood == Mood.THINKING -> 0.55f to -0.7f
+                pondering -> 0.35f to -0.45f  // a soft glance up and to the side
                 // Asleep: low, drifting very slowly so the screen doesn't burn in overnight, and
                 // turning sleepily toward you if you're there (it checks once a second)
                 mood == Mood.ASLEEP -> {
@@ -1114,6 +1119,8 @@ private fun easing(rate: Float, frameMs: Float) = 1f - (1f - rate).pow(frameMs /
 
 // The springy eye follow: about 2.6 bounces a second, damped so it overshoots only a little (~8 %)
 private const val LOOK_SPRING = 191f    // (2π × 2.2)²: a calm, unhurried follow
+// How long Gemini has to be "thinking" before the eyes (and head) glance up to ponder
+const val PONDER_AFTER_MS = 1200L
 private const val LOOK_DAMPING = 23.5f  // 2 × 0.85 × 2π × 2.2: only a whisper of overshoot
 
 // A repeatable "random" number 0..1 from any number (same input, same answer)

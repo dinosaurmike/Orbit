@@ -223,7 +223,6 @@ class Neck(
             }
         }
         wasFollowing = tracker.seesFace() && targetPan == followPan && targetTilt == followTilt
-        remember(now)
         // Glide there on a spring with no overshoot: eases in, eases out, like a real head turning
         // (rate 3 ≈ settled in 0.8 s)
         val step = dt.coerceAtMost(0.05f)
@@ -243,10 +242,7 @@ class Neck(
         if (!holdStill && manualAim == null) {
             gestureTilt -= 4f * musicBob  // a little nod to the beat
             gesturePan += 7f * musicSway  // ...and a sway, like dancing
-            if (mood == Mood.THINKING) {  // glance up and to the side, like the eyes do
-                gesturePan += 8f
-                gestureTilt -= 6f
-            }
+            // Thinking: only the eyes glance up (see Face); the head stays on you
             if (mood == Mood.SPEAKING) gestureTilt -= 3f * gemini.voiceLevel()  // bob with the voice
             // Expressions and idle moves move the head too (see Expressions.kt)
             val latest = gemini.expression()
@@ -264,6 +260,11 @@ class Neck(
         }
         pan = (aimPan + gesturePan).coerceIn(-range, range)
         tilt = (aimTilt + gestureTilt).coerceIn(-settings.tiltUp, settings.tiltDown)
+        // Remember where the head really pointed, gestures included (thinking, talking, nods): the
+        // camera rides on the head, so that's what each picture was taken from. Remembering only the
+        // base pose made every gesture look like you'd moved, and it kept "re-centring" back and
+        // forth during conversations.
+        remember(now)
 
         if (settings.neckOn) send(now)
     }
@@ -298,8 +299,8 @@ class Neck(
     private fun remember(now: Long) {
         pastIndex = (pastIndex + 1) % pastTime.size
         pastTime[pastIndex] = now
-        pastPan[pastIndex] = aimPan
-        pastTilt[pastIndex] = aimTilt
+        pastPan[pastIndex] = pan
+        pastTilt[pastIndex] = tilt
     }
 
     // Where the head was pointing at time t (the nearest remembered moment)
@@ -330,7 +331,9 @@ class Neck(
         // How far off-centre before it re-centres you, and how close to the middle it stops
         val enter = settings.watchZone * (if (near || talking) 1f else 2.5f)
         val exit = enter * 0.4f
-        if (tracker.detections != lastDetection) {
+        // A fresh sighting, used once (but not while the head is swinging fast: that picture is
+        // blurred and a moment out of date, so it would only cause an overshoot)
+        if (tracker.detections != lastDetection && abs(panSpeed) < 60f && abs(tiltSpeed) < 60f) {
             lastDetection = tracker.detections
             val offX = abs(tracker.rawX)
             val offY = abs(tracker.rawY)

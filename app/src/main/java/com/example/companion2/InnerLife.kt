@@ -16,7 +16,11 @@ class InnerLife(private val settings: Settings, private val currentKey: () -> St
 
     // True once a day: when it's on, has a key, and hasn't done today's homework yet
     fun homeworkDue() = settings.innerLifeOn && !working && currentKey().isNotBlank() &&
-        settings.lastHomework != LocalDate.now().toString()
+        settings.lastHomework != LocalDate.now().toString() && System.currentTimeMillis() >= retryAt
+
+    // After a failed try (often Gemini's free daily limit), wait a few hours before the next one,
+    // instead of asking again every 30 seconds
+    @Volatile private var retryAt = 0L
 
     fun doHomework() {
         if (working) return
@@ -41,6 +45,7 @@ class InnerLife(private val settings: Settings, private val currentKey: () -> St
                 status = "Done for today"
             } catch (e: Exception) {
                 Log.e("Orbit", "Homework failed", e)
+                retryAt = System.currentTimeMillis() + 3 * 60 * 60 * 1000L
                 status = "Homework didn't work: ${e.message ?: e.javaClass.simpleName}"
             } finally {
                 working = false
