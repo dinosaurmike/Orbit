@@ -18,7 +18,7 @@
 - Homework that fails (for example when Gemini's free daily limit is used up) now waits three hours
   before trying again, instead of retrying every 30 seconds.
 
-## 0.1.0 (first public release, unreleased)
+## 0.1.0 (2026-10-31, first public release)
 
 First release of Orbit: holographic eyes that follow you, Gemini Live voice conversation with
 interruptions, offline wake word ("Orbit" / "Orby"), expressions, memory, a hobby and journal,
