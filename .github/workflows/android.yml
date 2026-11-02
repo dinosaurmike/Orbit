@@ -25,8 +25,12 @@ jobs:
           distribution: temurin
           java-version: '25'
 
+      # Accepts the SDK licences. Only platform-tools: the old default "tools" package no longer
+      # exists. The Android platform the app needs is downloaded by the build itself.
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
