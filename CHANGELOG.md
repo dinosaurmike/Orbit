@@ -2,6 +2,8 @@
 
 ## 0.1.1 (unreleased)
 
+- Unit tests for music beat detection and for every expression and idle move, run with Android
+  Lint and a secret scan on every push (GitHub Actions).
 - Fixed: a faint dark box could show across the top of the eyes. The CRT scan lines are now drawn
   line by line at exact pixel positions instead of as one repeating gradient, which some phone GPUs
   draw in low precision.

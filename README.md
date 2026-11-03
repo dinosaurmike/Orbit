@@ -2,7 +2,7 @@
 
 ![Orbit: an open-source AI desk companion](docs/images/orbit-header.gif)
 
-[![Android build](https://github.com/dinosaurmike/Orbit/actions/workflows/android.yml/badge.svg)](https://github.com/dinosaurmike/Orbit/actions/workflows/android.yml)
+[![Build and test](https://github.com/dinosaurmike/Orbit/actions/workflows/android.yml/badge.svg)](https://github.com/dinosaurmike/Orbit/actions/workflows/android.yml)
 [![Latest release](https://img.shields.io/github/v/release/dinosaurmike/Orbit)](https://github.com/dinosaurmike/Orbit/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -162,6 +162,11 @@ one hello photo a day). Full details: [docs/PRIVACY.md](docs/PRIVACY.md).
 2. Optional, for testing: put `GEMINI_API_KEY=your_key` in `local.properties`. It's only built
    into *debug* builds, never release builds. **Never commit `local.properties`.**
 3. Click **Run**.
+4. Run the unit tests with `./gradlew testDebugUnitTest` (or right-click `app/src/test` → **Run Tests**).
+
+Every push to GitHub runs the unit tests, builds the app, runs Android Lint and scans the whole
+history for leaked keys ([the workflow](.github/workflows/android.yml)); that's the **Build and
+test** badge at the top.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for a tour of the code.
 

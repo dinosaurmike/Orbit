@@ -102,6 +102,10 @@ A tray app, a Mac menu-bar app, or a Linux daemon are all welcome.
 ## Pull requests
 
 - One idea per pull request, with a short note on what it does and how you tested it (which phone).
+- Run the unit tests first: `./gradlew testDebugUnitTest`. GitHub runs them on every pull request
+  too. Added an expression or idle habit? `ExpressionsTest` checks it automatically (it exists, its
+  numbers stay in range, the eyes stay on screen); new logic that doesn't need the phone should
+  come with a test of its own in `app/src/test/`.
 - Screenshots or a short video for anything visual or animated.
 - New settings: a sensible default, help text in plain words, and an entry in `docs/PRIVACY.md`
   if it changes what leaves the phone.
