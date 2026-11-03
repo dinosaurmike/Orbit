@@ -1,6 +1,8 @@
-# Builds the Orbit Android app (debug APK) on every push and pull request.
-# The green "Android build" badge in the README comes from this workflow.
-name: Android build
+# Runs on every push and pull request:
+#   build   – unit tests, then builds the debug APK; Android Lint writes a report
+#   secrets – scans every file and every past commit for API keys and passwords (gitleaks)
+# The "Build and test" badge in the README comes from this workflow.
+name: Build and test
 
 on:
   push:
@@ -36,10 +38,25 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       # No API key is needed: debug builds read GEMINI_API_KEY from local.properties only if it exists.
-      - name: Build debug APK
+      - name: Unit tests and debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew testDebugUnitTest assembleDebug --stacktrace
+
+      # Reports for now; once the existing warnings are cleaned up this step will fail on errors.
+      - name: Android Lint
+        continue-on-error: true
+        run: ./gradlew lintDebug
+
+      - name: Upload test and lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            app/build/reports/tests/
+            app/build/reports/lint-results-debug.html
+          retention-days: 14
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -47,3 +64,15 @@ jobs:
           name: orbit-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # the whole history, so old commits are checked too
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
