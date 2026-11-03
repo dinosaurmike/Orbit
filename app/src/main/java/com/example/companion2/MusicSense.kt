@@ -9,7 +9,8 @@ import kotlin.math.sin
 // Notices music playing nearby and finds its beat, so the eyes (and head) can bob along.
 // Entirely on the phone, from the loudness of the microphone sound: nothing is recorded or
 // sent anywhere. Speech has no steady beat, so it doesn't count as music.
-class MusicSense {
+// `clock` is the time in milliseconds (the real clock; tests pass a pretend one)
+class MusicSense(private val clock: () -> Long = System::currentTimeMillis) {
     private val rate = 100                        // loudness readings per second (every 10 ms)
     private val history = FloatArray(rate * 6)    // the last 6 seconds of "something just got louder"
     private var filled = 0
@@ -72,7 +73,7 @@ class MusicSense {
             }
         }
         val steadiness = best / zero
-        val now = System.currentTimeMillis()
+        val now = clock()
         // Steady and loud enough for a few seconds: music
         val confident = steadiness > 0.3f && level > 11f
         if (!confident) {
