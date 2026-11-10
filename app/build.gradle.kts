@@ -29,6 +29,22 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Release signing: the same key every time, so each update installs over the last one (and keeps
+    // Orbit's memories and settings). The key never lives in this repository: GitHub Actions puts it
+    // in place from encrypted secrets (see .github/workflows/android.yml); on your own computer you
+    // can point these at your copy. Without them, release builds are simply left unsigned.
+    val releaseKeystore = System.getenv("ORBIT_KEYSTORE_FILE")
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("ORBIT_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ORBIT_KEY_ALIAS")
+                keyPassword = System.getenv("ORBIT_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         // The app reads BuildConfig.GEMINI_API_KEY as a fallback when no key is entered in settings
         debug {
@@ -38,6 +54,7 @@ android {
         release {
             // Published builds never contain a key: people enter their own in settings
             buildConfigField("String", "GEMINI_API_KEY", "\"\"")
+            if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
             // Code shrinking is off: shrinking only part of the app (Kotlin + AndroidX) made OkHttp
             // crash at start-up (IllegalAccessError on a renamed kotlin.text class) in 0.1.0
             optimization {
