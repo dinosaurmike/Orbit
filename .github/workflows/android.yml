@@ -1,5 +1,7 @@
 # Runs on every push and pull request:
 #   build   – unit tests, then builds the debug APK; Android Lint writes a report
+#   release – (not for pull requests) the signed release APK, checked against v0.1.0's signature;
+#             attached to the GitHub release when one is published
 #   secrets – scans every file and every past commit for API keys and passwords (gitleaks)
 # The "Build and test" badge in the README comes from this workflow.
 name: Build and test
@@ -10,6 +12,8 @@ on:
     paths-ignore: ['**.md', 'docs/**', 'desk/**', 'neck/**.md']
   pull_request:
   workflow_dispatch:
+  release:
+    types: [published]   # publishing a release on GitHub attaches the signed APK to it
 
 permissions:
   contents: read
@@ -64,6 +68,90 @@ jobs:
           name: orbit-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
+
+  # The release APK, signed with Orbit's release key so it installs over the previous version (and
+  # keeps Orbit's memories and settings). The key comes from the repository's encrypted secrets and
+  # is deleted at the end. Pull requests never see secrets, so this doesn't run for them.
+  release:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write   # to attach the APK to a GitHub release
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Put the signing key in place
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ORBIT_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::The ORBIT_KEYSTORE_BASE64 secret is missing (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/orbit-release.jks"
+
+      - name: Signed release APK
+        env:
+          ORBIT_KEYSTORE_FILE: ${{ runner.temp }}/orbit-release.jks
+          ORBIT_KEYSTORE_PASSWORD: ${{ secrets.ORBIT_KEYSTORE_PASSWORD }}
+          ORBIT_KEY_ALIAS: ${{ secrets.ORBIT_KEY_ALIAS }}
+          ORBIT_KEY_PASSWORD: ${{ secrets.ORBIT_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --stacktrace
+          version=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          cp app/build/outputs/apk/release/app-release.apk "orbit-$version.apk"
+          echo "APK=orbit-$version.apk" >> "$GITHUB_ENV"
+
+      # An update only installs over the previous version if it's signed with the same key
+      - name: Check it's signed with the same key as v0.1.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          digest() { "$tools/apksigner" verify --print-certs "$1" | grep -m1 'SHA-256 digest' | sed 's/.*: //'; }
+          gh release download v0.1.0 --pattern '*.apk' --dir "$RUNNER_TEMP/v0.1.0"
+          new=$(digest "$APK")
+          old=$(digest "$(ls "$RUNNER_TEMP"/v0.1.0/*.apk | head -1)")
+          echo "This build: $new"
+          echo "v0.1.0:     $old"
+          if [ -z "$new" ] || [ "$new" != "$old" ]; then
+            echo "::error::This APK isn't signed with the same key as v0.1.0, so it wouldn't install over it"
+            exit 1
+          fi
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: orbit-release-apk
+          path: ${{ env.APK }}
+          retention-days: 30
+
+      - name: Attach it to the GitHub release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "$APK" --clobber
+
+      - name: Remove the signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/orbit-release.jks"
 
   secrets:
     runs-on: ubuntu-latest
