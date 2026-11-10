@@ -64,6 +64,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var people: People
     private lateinit var calendar: DayCalendar
     private val music = MusicSense()
+    // Quick spoken replies to its name ("Yes?"), recorded once in Orbit's voice
+    private val replies by lazy { VoiceSamples(applicationContext) }
+    private var lastPerkAt = 0L  // when the eyes last perked up at what might be its name
     private lateinit var player: MusicControl  // plays and controls your music
     private var lastSongReaction = 0L
     private var maybeCalledAt = 0L  // when it last heard what might be its name (music dips)
@@ -233,6 +236,13 @@ class MainActivity : ComponentActivity() {
                     maybeCalledAt = System.currentTimeMillis()
                     player.duck()
                 }
+                // ...and the eyes perk up already, like a dog's ears (if it wasn't its name, the
+                // perk just fades). At most every 3 seconds, so a chatty room doesn't twitch it.
+                val now = System.currentTimeMillis()
+                if (!showSettings && !asleep && !gemini.active && now - lastPerkAt > 3000) {
+                    lastPerkAt = now
+                    gemini.showExpression("perk", 900)
+                }
             }
         }
         wake.onHeard = {
@@ -241,13 +251,19 @@ class MainActivity : ComponentActivity() {
                 if (!showSettings && !asleep && !gemini.active && gemini.hasKey()) {
                     tracker.touched()
                     sounds.hushedUntil = 0L  // calling it by name ends a "shh"
-                    gemini.showExpression("curious")  // a little "yes?" while it connects
+                    gemini.showExpression("wake", 1400)  // a quick, bright "yes?" while it connects
                     player.duck()
-                    gemini.start(fromWakeWord = true)
+                    // ...and says it out loud, in its own voice, without waiting for Gemini
+                    val replyMs = if (settings.wakeReply) replies.playReply(settings.voice) else 0L
+                    if (replyMs > 0) sounds.repliedAt = System.currentTimeMillis()
+                    if (settings.wakeReply) replies.prepareReplies(gemini.key(), settings.voice)
+                    gemini.start(fromWakeWord = true, quietMs = replyMs)
                 }
             }
         }
         if (settings.wakeWordOn) wake.prepare()
+        // Record the quick replies ("Yes?") in Orbit's voice, if they aren't on the phone yet
+        if (settings.wakeWordOn && settings.wakeReply) replies.prepareReplies(gemini.key(), settings.voice)
 
         // "What am I holding?": hand the next camera frame to Gemini as a photo.
         // If no frame comes (the camera is off), give up after 3 seconds.

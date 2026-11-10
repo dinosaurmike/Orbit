@@ -180,9 +180,11 @@ class GeminiLive(
     }
 
     // Opens a conversation. If greet is given, Orbit speaks first.
-    fun start(greet: String? = null, fromWakeWord: Boolean = false) {
+    // `quietMs`: how long Orbit is saying "Yes?" itself, so that isn't sent to Gemini as your words
+    fun start(greet: String? = null, fromWakeWord: Boolean = false, quietMs: Long = 0) {
         if (socket != null) return
-        skipChunks = if (fromWakeWord) 8 else 0  // 8 × 50 ms
+        // 8 × 50 ms: the end of its name; then as long as its own reply lasts
+        skipChunks = if (fromWakeWord) maxOf(8, (quietMs / 50).toInt() + 3) else 0
         val apiKey = currentKey()
         if (apiKey.isBlank()) {
             status = "No Gemini API key yet  ·  —  settings"
@@ -835,6 +837,12 @@ class GeminiLive(
                 "like that, it's just your name, never a question about options. "
         )
         append(settings.personality)
+        append(
+            "\n\nAlways speak English. Answer in English even when what you hear sounds like another " +
+                "language or is unclear; never switch language on your own. Only speak another language " +
+                "if the person clearly asks you to (for example \"say that in Spanish\" or \"let's speak " +
+                "French\"), and go back to English when they ask, or when the conversation ends."
+        )
         val now = ZonedDateTime.now()
             .format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, h:mm a (zzzz)", Locale.getDefault()))
         append("\n\nIt is currently $now.")

@@ -148,7 +148,15 @@ fun OrbitPage(
         settings.wakeWordOn = it
         if (it) wake.prepare()
     }
-    if (settings.wakeWordOn) WakeWordCheck(wake)
+    if (settings.wakeWordOn) {
+        SwitchSetting(
+            "Answer \"Yes?\" when called",
+            "Says a quick \"Yes?\" or \"Mm-hm?\" in its own voice the moment it hears its name. Recorded " +
+                "once in your chosen voice and kept on the phone.",
+            settings.wakeReply
+        ) { settings.wakeReply = it }
+        WakeWordCheck(wake)
+    }
 
     SwitchSetting(
         "Say hello when I arrive",

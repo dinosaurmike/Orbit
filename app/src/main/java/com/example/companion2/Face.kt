@@ -292,7 +292,8 @@ fun Face(
                     mood == Mood.DOZING -> {}  // it already yawned while getting sleepy
                     lastMood == Mood.DOZING && mood == Mood.IDLE ->
                         if (clock - lastStartle > 2000) sounds.play(Sound.CHIRP, 0.6f)
-                    lastMood == Mood.IDLE && mood == Mood.LISTENING -> sounds.play(Sound.LISTEN)
+                    lastMood == Mood.IDLE && mood == Mood.LISTENING ->
+                        if (clock - sounds.repliedAt > 2000) sounds.play(Sound.LISTEN)
                     wasTalking && mood == Mood.IDLE -> sounds.play(Sound.END)
                     mood == Mood.THINKING -> if (clock - lastThinkSound > 4000) {
                         lastThinkSound = clock

@@ -131,6 +131,7 @@ class Settings(context: Context) {
     var wakeWordOn by switch("wakeWordOn", false)     // start talking by saying the wake phrase
     var vision by switch("vision", true)              // may take a photo when you ask it to look
     var wakePhrase by text("wakePhrase", "orbit, orby")  // wake words, separated by commas
+    var wakeReply by switch("wakeReply", true)       // answers "Yes?" the moment it hears its name
 
     // Night (Device page): dim or sleep during set hours
     var nightOn by switch("nightOn", false)

@@ -147,6 +147,91 @@ class VoiceSamples(private val context: Context) {
         }
     }
 
+    // ---- Quick replies to its name ----
+    // "Yes?", "Mm-hm?"… in Orbit's own voice, recorded once per voice and kept on the phone, so it
+    // can answer the instant it hears its name (opening a conversation with Gemini takes a moment).
+
+    private fun replyFile(voice: String, line: String) =
+        File(File(context.filesDir, "wake_replies"), "$CACHE_VERSION$voice-${line.hashCode()}.pcm")
+
+    @Volatile private var preparingReplies = false
+
+    // Records any replies this voice doesn't have yet, in the background. Cheap to call again.
+    fun prepareReplies(key: String, voice: String) {
+        if (key.isBlank() || preparingReplies) return
+        val missing = REPLY_LINES.filter { !replyFile(voice, it).exists() }
+        if (missing.isEmpty()) return
+        preparingReplies = true
+        thread(name = "wake-replies") {
+            try {
+                for (line in missing) {
+                    val pcm = trimSilence(fetch(key, voice, line))
+                    if (pcm.size < SAMPLE_RATE / 10) continue  // under 50 ms: nothing usable came back
+                    val file = replyFile(voice, line)
+                    file.parentFile?.mkdirs()
+                    file.writeBytes(pcm)
+                }
+            } catch (e: Exception) {
+                Log.w("Orbit", "Couldn't record the quick replies (will try again later)", e)
+            } finally {
+                preparingReplies = false
+            }
+        }
+    }
+
+    // Says one of the replies, picked at random, straight away. Returns how long it lasts (ms),
+    // or 0 if this voice has none recorded yet.
+    fun playReply(voice: String): Long {
+        val ready = REPLY_LINES.map { replyFile(voice, it) }.filter { it.exists() }
+        if (ready.isEmpty()) return 0
+        val pcm = smooth(ready.random().readBytes())
+        return try {
+            val t = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(SAMPLE_RATE)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build()
+                )
+                .setBufferSizeInBytes(pcm.size)
+                .setTransferMode(AudioTrack.MODE_STATIC)  // all loaded up front: starts at once
+                .build()
+            t.write(pcm, 0, pcm.size)
+            t.play()
+            val ms = pcm.size / 2 * 1000L / SAMPLE_RATE
+            thread(name = "wake-reply-done") {
+                Thread.sleep(ms + 300)
+                t.release()
+            }
+            ms
+        } catch (e: Exception) {
+            Log.w("Orbit", "Couldn't play the quick reply", e)
+            0
+        }
+    }
+
+    // Cuts the quiet before and after the words (keeping a few ms), so the reply starts at once
+    private fun trimSilence(raw: ByteArray): ByteArray {
+        val samples = raw.size / 2
+        fun level(i: Int) = kotlin.math.abs(((raw[i * 2 + 1].toInt() shl 8) or (raw[i * 2].toInt() and 0xFF)).toShort().toInt())
+        var first = 0
+        while (first < samples && level(first) < 600) first++
+        var last = samples - 1
+        while (last > first && level(last) < 600) last--
+        if (first >= last) return ByteArray(0)
+        val margin = SAMPLE_RATE / 50  // 20 ms
+        val from = maxOf(0, first - margin)
+        val to = minOf(samples, last + margin)
+        return raw.copyOfRange(from * 2, to * 2)
+    }
+
     // Tidies the raw sound so it starts and ends cleanly: whole samples only, a quick fade in
     // and out (no click), and a moment of silence at the end (no crackle as playback stops)
     private fun smooth(raw: ByteArray): ByteArray {
@@ -302,5 +387,7 @@ class VoiceSamples(private val context: Context) {
     companion object {
         const val SAMPLE_RATE = 24_000  // what Gemini's speech comes back as
         private const val CACHE_VERSION = "v2-"
+        // What it says when it hears its name (one at random)
+        val REPLY_LINES = listOf("Yes?", "Mm-hm?", "I'm listening.", "What's up?", "Hey!")
     }
 }

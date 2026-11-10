@@ -48,6 +48,9 @@ class Sounds(private val settings: Settings) {
     // After a "shh": only reminders and timers make a sound until then (ms)
     @Volatile var hushedUntil = 0L
 
+    // When it last answered its name out loud ("Yes?"): the listening chime then stays quiet
+    @Volatile var repliedAt = 0L
+
     // When it last made a sound (so it doesn't jump at its own chimes)
     @Volatile var lastPlayedAt = 0L
         private set
