@@ -4,8 +4,10 @@
 
 - Answers its name out loud: "Yes?", "Mm-hm?" or "I'm listening.", in its own voice, the moment it
   hears "Orbit" (recorded once per voice and kept on the phone; Settings → Talk can switch it off).
-- Quicker to react to its name: the eyes perk up on the first syllable ("Or…"), then give a quick,
-  bright "yes?" look once it's sure.
+- Quicker to react to its name: the eyes perk up the moment you start talking to it (while it can
+  see you), then give a quick, bright "yes?" look once it's sure it heard its name. No more "thinking"
+  spinner while it connects: it's already listening.
+- Settings show whether the quick replies are recorded (or why not); a failed try waits 10 minutes.
 - Speaks English unless you ask for another language (it sometimes switched on its own when it
   misheard).
 - Unit tests for music beat detection and for every expression and idle move, run with Android
