@@ -255,9 +255,11 @@ fun OrbitPage(
 private fun WakeWordCheck(wake: WakeWord) {
     var wakeStatus by remember { mutableStateOf(wake.status) }
     var wakeCheck by remember { mutableStateOf("") }
+    var replyStatus by remember { mutableStateOf(VoiceSamples.replyStatus) }
     LaunchedEffect(Unit) {
         while (true) {
             wakeStatus = wake.status
+            replyStatus = VoiceSamples.replyStatus
             val now = System.currentTimeMillis()
             wakeCheck = when {
                 now - wake.lastWakeAt < 3000 -> "✓ Heard it!"
@@ -271,6 +273,7 @@ private fun WakeWordCheck(wake: WakeWord) {
     }
     Text(wakeStatus, color = Accent, fontSize = 14.sp)
     if (wakeCheck.isNotEmpty()) Text(wakeCheck, color = Muted, fontSize = 14.sp)
+    if (replyStatus.isNotEmpty()) Text(replyStatus, color = Muted, fontSize = 14.sp)
 }
 
 @Composable

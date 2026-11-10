@@ -319,7 +319,9 @@ fun Face(
 
             timerLeft = settings.timeLeftOnSoonest(clock) ?: -1f
             // Waiting on Gemini for more than a moment: show the little spinner (not for a blink)
-            val waiting = mood == Mood.THINKING || gemini.connecting
+            // Connecting after a tap or its name isn't "thinking": it's already listening (what you say
+            // is kept and sent once connected), so only a slow connection shows the spinner
+            val waiting = mood == Mood.THINKING || gemini.connectingFor() > 2500
             if (!waiting) waitingSince = 0L else if (waitingSince == 0L) waitingSince = clock
             thinkingGoal = if (waitingSince != 0L && clock - waitingSince > 300) 1f else 0f
             weatherStrength = weather.strength(clock)

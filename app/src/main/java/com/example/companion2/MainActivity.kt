@@ -66,7 +66,8 @@ class MainActivity : ComponentActivity() {
     private val music = MusicSense()
     // Quick spoken replies to its name ("Yes?"), recorded once in Orbit's voice
     private val replies by lazy { VoiceSamples(applicationContext) }
-    private var lastPerkAt = 0L  // when the eyes last perked up at what might be its name
+    @Volatile private var lastPerkAt = 0L  // when the eyes last perked up at what might be its name
+    private var quietSince = 0L             // when it last went quiet (for noticing you start talking)
     private lateinit var player: MusicControl  // plays and controls your music
     private var lastSongReaction = 0L
     private var maybeCalledAt = 0L  // when it last heard what might be its name (music dips)
@@ -292,6 +293,9 @@ class MainActivity : ComponentActivity() {
             gemini.sendSound(sound, level)
             // Between conversations, listen (on the phone only) for the wake phrase
             if (settings.wakeWordOn && !gemini.active && !asleep) wake.listen(sound)
+            // ...and if you start talking while facing it, the eyes perk up straight away: before
+            // the wake word is recognised (which takes a moment), so calling its name feels instant
+            if (settings.wakeWordOn && !gemini.active && !asleep) noticeVoice(level)
             // ...and for music, to bob along to
             if (settings.musicOn && !gemini.active && !asleep) music.listen(sound)
         }
@@ -304,6 +308,10 @@ class MainActivity : ComponentActivity() {
                 if (!gemini.active && heat.level == 0 && life.homeworkDue()) life.doHomework()
                 checkNudges()
                 checkCalendar()
+                // Quick replies ("Yes?"): record them as soon as the wake word is on (cheap once done)
+                if (settings.wakeWordOn && settings.wakeReply && !gemini.active) {
+                    replies.prepareReplies(gemini.key(), settings.voice)
+                }
                 maybeDaydream()
                 delay(30_000)
             }
@@ -1201,6 +1209,23 @@ class MainActivity : ComponentActivity() {
             val code = link.getQueryParameter("code")
             if (code != null) player.spotify.finishSignIn(code) else player.spotify.status = "Spotify sign-in was cancelled"
             showSettings = true
+        }
+    }
+
+    // You started talking (after half a second of quiet) while it can see you: perk up at once.
+    // At most every 2.5 seconds, and only when someone's there, so a radio in an empty room doesn't.
+    private fun noticeVoice(level: Float) {
+        val now = System.currentTimeMillis()
+        if (level < settings.voiceThreshold) {
+            if (quietSince == 0L) quietSince = now
+            return
+        }
+        val wasQuiet = quietSince != 0L && now - quietSince > 500
+        quietSince = 0L
+        if (!wasQuiet || now - lastPerkAt < 2500 || !tracker.seesFace()) return
+        lastPerkAt = now
+        runOnUiThread {
+            if (!showSettings && !asleep && !gemini.active) gemini.showExpression("perk", 1100)
         }
     }
 

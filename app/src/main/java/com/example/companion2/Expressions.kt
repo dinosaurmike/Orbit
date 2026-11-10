@@ -65,10 +65,10 @@ val MOVES: Map<String, Move> = mapOf(
     // Wake word: "perk" on the first sound of its name ("Or…"), before it's sure, like a dog's
     // ears; "wake" once it's sure. Both quick to rise, so the eyes answer as you speak.
     "perk" to move { p, pose ->
-        val k = hold(p, rise = 0.12f, fall = 0.5f)
-        pose.grow *= 1f + 0.05f * k
-        pose.glow *= 1f + 0.15f * k
-        pose.neckTilt -= 2f * k
+        val k = hold(p, rise = 0.1f, fall = 0.45f)
+        pose.grow *= 1f + 0.08f * k
+        pose.glow *= 1f + 0.25f * k
+        pose.neckTilt -= 3f * k
     },
     "wake" to move { p, pose ->
         val k = hold(p, rise = 0.06f, fall = 0.35f)

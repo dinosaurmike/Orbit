@@ -155,24 +155,41 @@ class VoiceSamples(private val context: Context) {
         File(File(context.filesDir, "wake_replies"), "$CACHE_VERSION$voice-${line.hashCode()}.pcm")
 
     @Volatile private var preparingReplies = false
+    @Volatile private var replyFailedAt = 0L
 
-    // Records any replies this voice doesn't have yet, in the background. Cheap to call again.
+    // Records any replies this voice doesn't have yet, in the background. Cheap to call again; after
+    // a failure (no internet, Gemini's daily limit) it waits 10 minutes before trying again.
     fun prepareReplies(key: String, voice: String) {
-        if (key.isBlank() || preparingReplies) return
         val missing = REPLY_LINES.filter { !replyFile(voice, it).exists() }
-        if (missing.isEmpty()) return
+        if (missing.isEmpty()) {
+            replyStatus = "Quick replies: ready (\"Yes?\", \"Mm-hm?\"…)"
+            return
+        }
+        if (key.isBlank()) {
+            replyStatus = "Quick replies: need a Gemini key first"
+            return
+        }
+        if (preparingReplies || System.currentTimeMillis() - replyFailedAt < 10 * 60_000) return
         preparingReplies = true
         thread(name = "wake-replies") {
             try {
-                for (line in missing) {
+                for ((i, line) in missing.withIndex()) {
+                    replyStatus = "Quick replies: recording them in this voice… (${i + 1} of ${missing.size})"
                     val pcm = trimSilence(fetch(key, voice, line))
                     if (pcm.size < SAMPLE_RATE / 10) continue  // under 50 ms: nothing usable came back
                     val file = replyFile(voice, line)
                     file.parentFile?.mkdirs()
                     file.writeBytes(pcm)
                 }
+                val ready = REPLY_LINES.count { replyFile(voice, it).exists() }
+                replyStatus = if (ready > 0) "Quick replies: ready (\"Yes?\", \"Mm-hm?\"…)"
+                else "Quick replies: nothing came back from Gemini; trying again in 10 minutes"
+                if (ready == 0) replyFailedAt = System.currentTimeMillis()
             } catch (e: Exception) {
                 Log.w("Orbit", "Couldn't record the quick replies (will try again later)", e)
+                replyFailedAt = System.currentTimeMillis()
+                replyStatus = "Quick replies: couldn't record them (${e.message ?: e.javaClass.simpleName}); " +
+                    "trying again in 10 minutes. Until then it chimes."
             } finally {
                 preparingReplies = false
             }
@@ -387,6 +404,8 @@ class VoiceSamples(private val context: Context) {
     companion object {
         const val SAMPLE_RATE = 24_000  // what Gemini's speech comes back as
         private const val CACHE_VERSION = "v2-"
+        // How recording the quick replies is going, for the settings screen
+        @Volatile var replyStatus = ""
         // What it says when it hears its name (one at random)
         val REPLY_LINES = listOf("Yes?", "Mm-hm?", "I'm listening.", "What's up?", "Hey!")
     }

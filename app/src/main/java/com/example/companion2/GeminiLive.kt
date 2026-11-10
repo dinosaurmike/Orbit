@@ -69,6 +69,9 @@ class GeminiLive(
     val active get() = socket != null || retryPending
     // Opening a conversation, not ready to talk yet (the eyes already look attentive)
     val connecting get() = socket != null && !ready
+    @Volatile private var connectStartedAt = 0L
+    // How long it's been connecting (ms), or 0 when it isn't
+    fun connectingFor() = if (connecting) System.currentTimeMillis() - connectStartedAt else 0L
     // A dropped connection being tried again automatically (a couple of times at most)
     @Volatile private var retryPending = false
     @Volatile private var retries = 0
@@ -183,6 +186,7 @@ class GeminiLive(
     // `quietMs`: how long Orbit is saying "Yes?" itself, so that isn't sent to Gemini as your words
     fun start(greet: String? = null, fromWakeWord: Boolean = false, quietMs: Long = 0) {
         if (socket != null) return
+        connectStartedAt = System.currentTimeMillis()
         // 8 × 50 ms: the end of its name; then as long as its own reply lasts
         skipChunks = if (fromWakeWord) maxOf(8, (quietMs / 50).toInt() + 3) else 0
         val apiKey = currentKey()
