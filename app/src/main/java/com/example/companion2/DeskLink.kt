@@ -9,6 +9,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
 import kotlin.concurrent.thread
+import java.net.URLEncoder
 import org.json.JSONObject
 
 // Where Orbit Desk (desk/orbit_desk.py, a small program on your computer) listens
@@ -22,6 +23,8 @@ const val DESK_DISCOVERY_PORT = 47801
 // Plain sockets are used on purpose: it's a tiny local request, and Android blocks unencrypted
 // HTTP libraries by default (which is right for the internet, but this never leaves the house).
 class DeskLink(private val settings: Settings) {
+    // How the connection for agent news is doing (shown in settings; set by AgentBridge)
+    @Volatile var agentState = "Off"
 
     // Looks for computers running Orbit Desk on the network. Calls back (on a background
     // thread) with each one found: its name and address.
@@ -91,6 +94,36 @@ class DeskLink(private val settings: Settings) {
         Result.failure(Exception("couldn't reach the computer (is Orbit Desk running?)"))
     }
 
+    // News from agents on the computer. Orbit Desk holds the request open (about 15 seconds)
+    // until there's news, so it arrives the moment it's sent. Orbit says how it's doing in the
+    // same request (is someone at the desk, is it asleep...), for agents that ask.
+    // `quick`: answer straight away (when it first connects, to know it works)
+    fun events(since: Long, boot: String, status: Map<String, String>, quick: Boolean = false): Result<AgentBatch> = try {
+        val query = (mapOf("since" to since.toString(), "boot" to boot) + status +
+            (if (quick) mapOf("wait" to "0") else emptyMap())).entries
+            .joinToString("&") { "${it.key}=${URLEncoder.encode(it.value, "UTF-8")}" }
+        val (code, body) = request("/events?$query", readTimeoutMs = 30_000)
+        when (code) {
+            200 -> {
+                val json = JSONObject(String(body))
+                val list = json.optJSONArray("events")
+                val events = (0 until (list?.length() ?: 0)).mapNotNull { i ->
+                    list?.optJSONObject(i)?.let {
+                        AgentEvent(
+                            it.optLong("id"), it.optString("kind"), it.optString("message").take(240),
+                            it.optString("source").take(60), it.optString("move")
+                        )
+                    }
+                }
+                Result.success(AgentBatch(events, json.optLong("next", since), json.optString("boot")))
+            }
+            404 -> Result.failure(Exception("Orbit Desk on the computer is an older version: update it"))
+            else -> Result.failure(Exception(problem(code, body)))
+        }
+    } catch (e: Exception) {
+        Result.failure(Exception("couldn't reach the computer (is Orbit Desk running?)"))
+    }
+
     private fun problem(status: Int, body: ByteArray): String = when (status) {
         401 -> "the pairing code is wrong"
         423 -> "sharing is paused on the computer"
@@ -103,14 +136,14 @@ class DeskLink(private val settings: Settings) {
     }
 
     // One small HTTP request; returns the status code and the body
-    private fun request(path: String): Pair<Int, ByteArray> {
+    private fun request(path: String, readTimeoutMs: Int = 10_000): Pair<Int, ByteArray> {
         val address = settings.deskAddress.trim()
         val host = address.substringBefore(':')
         val port = address.substringAfter(':', "").toIntOrNull() ?: DESK_PORT
         if (host.isBlank()) throw IllegalStateException("no computer address yet")
         Socket().use { socket ->
             socket.connect(InetSocketAddress(host, port), 3000)
-            socket.soTimeout = 10_000
+            socket.soTimeout = readTimeoutMs
             val out = socket.getOutputStream()
             out.write(
                 ("GET $path HTTP/1.0\r\nHost: $host\r\n" +

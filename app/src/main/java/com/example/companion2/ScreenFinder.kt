@@ -11,12 +11,18 @@ import kotlin.concurrent.thread
 // (finer steps, then up and down) the same way, and turns there. After that, it asks you in
 // conversation whether it's right, and you can fine-tune by voice ("a bit left", "perfect").
 //
-// Needs the neck connected and a Gemini key. Takes about half a minute.
+// It searches with the back camera (Orbit faces you, so your screen is usually behind or beside
+// it), or the front one if that's switched off in settings or the phone has no back camera.
+//
+// Needs the neck connected and a Gemini key. Takes about a minute (half that with the front camera).
 class ScreenFinder(
     private val settings: Settings,
     private val neck: Neck,
-    private val gemini: GeminiLive
+    private val gemini: GeminiLive,
+    private val backPhoto: ((ByteArray?) -> Unit) -> Unit  // one photo from the back camera
 ) {
+    // Whether this search is using the back camera
+    @Volatile private var usingBack = false
     @Volatile var busy = false
         private set
 
@@ -28,29 +34,39 @@ class ScreenFinder(
         val key = gemini.key()
         if (key.isBlank()) return done("I need a Gemini key for that")
         busy = true
+        usingBack = settings.screenBackCamera
         thread(name = "find-screen") {
             try {
                 val range = settings.panRange
-                // 1. A wide look round: 7 photos across the whole range
+                // 1. A wide look round: 7 photos across the whole range. With the back camera the
+                //    screen is usually above it (Orbit sits on the desk), so it looks with its
+                //    face tilted down (the back camera tilts up) first, then level: 14 photos.
                 val step = 2f * range / 6f
-                val wide = (0..6).map { -range + it * step to 0f }
+                val rows = if (usingBack) listOf(settings.tiltDown * 0.7f, 0f) else listOf(0f)
+                val wide = rows.flatMap { tilt -> (0..6).map { -range + it * step to tilt } }
                 val rough = pick(wide, key, "Which photo shows a computer screen or monitor? If several " +
                     "do, pick the one where it's biggest and nearest the middle.")
                     ?: return@thread done("I couldn't spot a screen anywhere I can turn to")
-                // 2. A closer look around that spot
+                // 2. A closer look around that spot, at the same height
                 val near = listOf(-0.5f, -0.25f, 0f, 0.25f, 0.5f)
-                    .map { (rough.first + it * step).coerceIn(-range, range) to 0f }
+                    .map { (rough.first + it * step).coerceIn(-range, range) to rough.second }
                 val side = pick(near, key, "Which photo shows the computer screen most squarely, " +
                     "closest to the middle of the photo from left to right?") ?: rough
-                // 3. Up and down
-                val heights = listOf(-settings.tiltUp * 0.7f, -settings.tiltUp * 0.3f, 0f, settings.tiltDown * 0.3f)
-                    .map { side.first to it }
+                // 3. Up and down. Screens usually sit higher than Orbit: the front camera looks up
+                // when the head tilts up; the back camera looks up when the head tilts down (all
+                // the way down = the back camera at its highest).
+                val heights = (if (usingBack) {
+                    listOf(settings.tiltDown, settings.tiltDown * 0.7f, settings.tiltDown * 0.4f, 0f, -settings.tiltUp * 0.4f)
+                } else {
+                    listOf(-settings.tiltUp * 0.7f, -settings.tiltUp * 0.3f, 0f, settings.tiltDown * 0.3f)
+                }).map { side.first to it }
                 val best = pick(heights, key, "Which photo shows the computer screen most completely, " +
                     "closest to the middle of the photo from top to bottom?") ?: side
                 // Point there and remember it
                 neck.manualAim = best
                 settings.screenPan = best.first
                 settings.screenTilt = best.second
+                settings.screenSpotBack = usingBack
                 settings.screenSpotSet = true
                 done(null)
             } catch (e: Exception) {
@@ -82,24 +98,29 @@ class ScreenFinder(
         val answer = GeminiText.askAboutPhotos(
             key,
             "These photos were taken by a small desk robot turning its head to look around a " +
-                "room. $question Answer with just the photo number, or 0 if none shows a " +
-                "computer screen or monitor.",
+                "room. $question Only choose a photo where you can clearly see a computer screen or " +
+                "monitor; never guess. Answer with just the photo number, or 0 if none clearly shows one.",
             photos
         ) ?: return null
         val number = Regex("\\d+").find(answer)?.value?.toIntOrNull() ?: return null
         return taken.getOrNull(number - 1)
     }
 
-    // One photo from the camera (waits up to 4 seconds)
+    // One photo from the camera (waits up to 6 seconds)
     private fun snap(): ByteArray? {
-        val ask = gemini.onLook ?: return null
         val ready = CountDownLatch(1)
         var photo: ByteArray? = null
-        ask(false) {
+        val deliver: (ByteArray?) -> Unit = {
             photo = it
             ready.countDown()
         }
-        ready.await(4, TimeUnit.SECONDS)
+        if (usingBack) {
+            backPhoto(deliver)
+        } else {
+            val ask = gemini.onLook ?: return null
+            ask(false, deliver)
+        }
+        ready.await(6, TimeUnit.SECONDS)
         return photo
     }
 }

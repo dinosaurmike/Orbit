@@ -981,9 +981,11 @@ fun ScreenSpotSettings(settings: Settings, neck: Neck, gemini: GeminiLive, onFin
         "Your screen",
         "So Orbit can turn and look at your screen when you ask \"what do you think of this?\" " +
             "(with its own camera; nothing to install on the computer). Tap Find my screen, or say " +
-            "\"Orby, find my screen\": it looks around by itself (about half a minute), turns to the " +
+            "\"Orby, find my screen\": it looks around by itself (about a minute), turns to the " +
             "screen, then asks you to fine-tune it by voice (\"a bit left\", \"up\", \"perfect\"). " +
-            "Put it beside your screen, not in front of it."
+            "It looks with the back camera (Computer settings), so it can face you with the screen " +
+            "behind or beside it. If your screen sits high, let it bow further forward (Look down, " +
+            "above): tilting its face down points the back camera up."
     )
     Button(onClick = onFindScreen, enabled = settings.neckOn) { Text("Find my screen") }
     Text(
@@ -1048,16 +1050,34 @@ fun ComputerSettings(settings: Settings, desk: DeskLink) {
     var searching by remember { mutableStateOf(false) }
     var found by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
     var testResult by remember { mutableStateOf("") }
+    // How the agent-news connection is doing (checked once a second while this page is open)
+    var agentState by remember { mutableStateOf(desk.agentState) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            agentState = desk.agentState
+            delay(1000)
+        }
+    }
 
     SwitchSetting(
         "Look at my computer screen (when I ask)",
         "Ask \"what do you think of this?\" or \"can you help with this error?\" and $name turns " +
-            "its head to your screen, takes one photo with its camera and talks about it. Nothing " +
-            "to install on the computer. It never looks on its own. Needs the neck: show it where " +
-            "your screen in Device → Neck (Your screen).",
+            "to your screen, takes one photo and talks about it. Nothing to install on the " +
+            "computer. It never looks on its own. Needs the neck: show it where your screen is in " +
+            "Device → Neck (Your screen).",
         settings.screenLookOn
     ) { settings.screenLookOn = it }
     if (settings.screenLookOn) {
+        SwitchSetting(
+            "Use the back camera for the screen",
+            "$name faces you, so your screen is usually behind or beside it: the camera on the back " +
+                "of the phone looks at the screen, and the front one stays on you. Turn off if your " +
+                "screen is in front of $name. (Changing this means finding the screen again.)",
+            settings.screenBackCamera
+        ) {
+            settings.screenBackCamera = it
+            settings.screenSpotSet = false
+        }
         Text(
             when {
                 !settings.neckOn -> "Waiting for the neck (Device → Neck)."
@@ -1069,14 +1089,14 @@ fun ComputerSettings(settings: Settings, desk: DeskLink) {
     }
 
     SwitchSetting(
-        "Optional: sharper text with Orbit Desk",
-        "For crisp text, or without a neck: run Orbit Desk, a small free program, on the " +
-            "computer (it's in the desk folder on Orbit's GitHub page). $name then gets a real " +
-            "screenshot instead of a photo. Same home network needed.",
+        "Orbit Desk on my computer",
+        "A small free program for your computer (the desk folder on Orbit's GitHub page). It gives " +
+            "$name a real screenshot instead of a photo of your screen, and lets coding agents and " +
+            "scripts on the computer get your attention through $name. Same home network needed.",
         settings.deskOn
     ) { settings.deskOn = it }
 
-    if (settings.screenLookOn && settings.deskOn) {
+    if (settings.deskOn) {
         SettingTitle(
             "Setting it up",
             "1) On the computer, run Orbit Desk (the desk folder on the Orbit GitHub page has it " +
@@ -1133,6 +1153,36 @@ fun ComputerSettings(settings: Settings, desk: DeskLink) {
         }
         if (testResult.isNotEmpty()) Text(testResult, color = Accent)
 
+        if (settings.screenLookOn) {
+            SwitchSetting(
+                "Use it for screen pictures",
+                "A real screenshot: sharp text, at any angle. Off: $name uses its camera instead.",
+                settings.deskScreen
+            ) { settings.deskScreen = it }
+        }
+
+        SwitchSetting(
+            "Let coding agents get my attention",
+            "When a coding agent (Antigravity, Cursor, Codex, Claude Code…) or a script on the " +
+                "computer finishes, gets stuck or needs your decision, $name looks at you and tells " +
+                "you. Away from your desk? It tells you when you're back. A blue glow means an agent " +
+                "is waiting for you. Setting up the agents: see the desk folder's README.",
+            settings.agentsOn
+        ) { settings.agentsOn = it }
+        if (settings.agentsOn) {
+            SwitchSetting(
+                "Say the news out loud",
+                "In $name's voice (the few words of news go to Gemini to be spoken). Off: just a " +
+                    "look and a sound. In a focus session, only \"needs you\" and problems are spoken.",
+                settings.agentSpeak
+            ) { settings.agentSpeak = it }
+            Text(agentState, color = Accent)
+            Text(
+                "Try it, on the computer:  python orbit_desk.py notify done \"Hello from my computer\"",
+                color = Muted
+            )
+        }
+
         SettingTitle("Where's the computer?", "$name glances that way when it looks at your screen.")
         ChoiceRow {
             Choice("On its left", settings.deskOnLeft) { settings.deskOnLeft = true }
@@ -1141,8 +1191,10 @@ fun ComputerSettings(settings: Settings, desk: DeskLink) {
         SettingTitle(
             "Privacy",
             "With Orbit Desk, the picture goes from your computer to this phone over your home network, then to " +
-                "Gemini, only when you ask. The computer lists every look, and you can pause it " +
-                "there any time. Think twice on a work computer: your employer's rules apply."
+                "Gemini, only when you ask. The computer lists every look and every piece of agent " +
+                "news, and you can pause either there any time. Agents can only send short news and " +
+                "reactions: never photos, sound or your screen. Think twice on a work computer: your " +
+                "employer's rules apply."
         )
     }
 }

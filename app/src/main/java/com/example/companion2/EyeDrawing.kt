@@ -604,6 +604,7 @@ val STATE_RED = Color(0xFFFF5A6A)     // not listening: privacy mode, or after a
 val STATE_GREEN = Color(0xFF5CFF9D)   // a timer is running
 val STATE_AMBER = Color(0xFFFFC857)   // a reminder or calendar event is coming up
 val STATE_VIOLET = Color(0xFFB794FF)  // a focus session
+val STATE_BLUE = Color(0xFF5AB8FF)    // a coding agent on your computer is waiting for you
 val RING_COLOR = Color(0xFFBFEFFF)    // the countdown ring: the eyes' own soft cyan
 
 // A soft glow around the edge of the whole screen in a state color: several rounded outlines,

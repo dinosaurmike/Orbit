@@ -191,12 +191,22 @@ class Settings(context: Context) {
     var screenSpotSet by switch("screenSpotSet", false)
     var screenPan by number("screenPan", 0f)          // neck pose to face the screen, degrees
     var screenTilt by number("screenTilt", 0f)
+    // The back camera looks at the screen (Orbit faces you, so the screen is usually behind it);
+    // the front camera stays for you: faces, gestures, "what am I holding?"
+    var screenBackCamera by switch("screenBackCamera", true)
+    var screenSpotBack by switch("screenSpotBack", false)  // the saved spot was found with the back camera
     // Optional extra: Orbit Desk on the computer, for sharp text (no neck needed)
     var deskOn by switch("deskOn", false)
     var deskAddress by text("deskAddress", "")        // e.g. 192.168.1.23:47800
     var deskCode by text("deskCode", "")              // the 6-digit pairing code it shows
     var deskName by text("deskName", "")              // the computer's name
     var deskOnLeft by switch("deskOnLeft", false)     // which way to glance when looking at it
+    var deskScreen by switch("deskScreen", true)      // use Orbit Desk's screenshots for screen looks
+    // News from coding agents and scripts on the computer, through Orbit Desk
+    var agentsOn by switch("agentsOn", true)
+    var agentSpeak by switch("agentSpeak", true)      // say the news out loud (in its own voice)
+    var agentBoot by text("agentBoot", "")            // which Orbit Desk run the news came from
+    var agentSince by text("agentSince", "0")         // the last news it got from that run
 
     // Sounds and habits (Orbit page)
     var soundsOn by switch("soundsOn", true)          // its little sounds (wake chirp, chimes…)

@@ -17,6 +17,22 @@ import okio.ByteString
 import org.json.JSONArray
 import org.json.JSONObject
 
+// Orbit never makes things up. Near the top of its instructions, for everything it says.
+const val TRUTHFUL = "Be truthful, always. Never guess, invent, assume or fill in gaps, about anything: " +
+    "what you see, what you know, what happened, what something says. Only say what you actually " +
+    "know or can actually see. Not knowing is completely fine, and you say it warmly and simply, " +
+    "in your own words, for example \"I don't know\", \"I can't quite tell\", \"I'm not sure what " +
+    "that is. Can you give me some clues?\", \"Can you hold it a bit closer?\" Asking for a clue or " +
+    "a better look is always better than a guess. This matters more than being helpful, quick or " +
+    "playful."
+
+// Sent with every photo and screenshot it looks at
+const val PHOTO_RULES = "Describe only what you can clearly see in that photo. Never guess or invent " +
+    "objects, text, colours or details that aren't clearly visible, and never fill in what's " +
+    "usually there. If the photo is dark, blurry, or doesn't show what they asked about, say exactly " +
+    "that instead of describing what might be there. If you can't tell what something is, say so " +
+    "and ask for help: a clue, holding it closer, turning it, or more light."
+
 // Holds a voice conversation with Gemini Live: sends your voice, plays its replies.
 // Tap the screen to start talking; tap again to end.
 // The key comes from settings; if that's blank, from local.properties (test builds only).
@@ -97,6 +113,9 @@ class GeminiLive(
     // is handed to the function it's given.
     // sharp = a bigger photo (for reading a screen)
     @Volatile var onLook: ((Boolean, (ByteArray?) -> Unit) -> Unit)? = null
+    // A photo of the computer screen: the back camera, when the screen spot was found with it
+    // (set by MainActivity)
+    @Volatile var onScreenPhoto: (((ByteArray?) -> Unit) -> Unit)? = null
 
     // Why it can't turn to look at the screen right now (null = it can). Set by MainActivity.
     @Volatile var screenProblem: () -> String? = { "no neck" }
@@ -470,7 +489,8 @@ class GeminiLive(
                         "description",
                         "Take one photo with your camera (you face the person) and look at it. " +
                             "Use it only when they ask you to look or see something: what they're " +
-                            "holding, how they look, what's around them, what's on their desk."
+                            "holding, how they look, what's around them, what's on their desk. Say " +
+                            "a quick \"let me see\" as you call it; describe only what the photo shows."
                     )
                     .put(
                         "parameters", JSONObject()
@@ -500,7 +520,8 @@ class GeminiLive(
                         "description",
                         "Take one picture of the person's computer screen and look at it. Use it " +
                             "only when they ask you to look at their screen or something on it: " +
-                            "\"what do you think of this?\", \"help me with this error\", \"check my email\"."
+                            "\"what do you think of this?\", \"help me with this error\", \"check my email\". " +
+                            "Say a quick \"let me take a look\" as you call it; describe only what the picture shows."
                     )
             )
         }
@@ -758,7 +779,7 @@ class GeminiLive(
                 command(
                     "find_screen",
                     "Look around for the person's computer screen, when they ask you to find it (or " +
-                        "you need to and haven't yet). It takes about half a minute; say you'll have a " +
+                        "you need to and haven't yet). It takes about a minute; say you'll have a " +
                         "look, and you'll be told when you've found it."
                 )
             )
@@ -768,7 +789,10 @@ class GeminiLive(
                     .put(
                         "description",
                         "Turn your head a little while they guide you onto their computer screen: " +
-                            "\"a bit left\", \"more right\", \"up\", \"down\". Left and right are as THEY see you."
+                            "\"a bit left\", \"more right\", \"up\", \"down\". Left and right are as THEY see you." +
+                            if (settings.screenBackCamera) " You look at the screen with the camera on the BACK of " +
+                                "your head, so they're steering where the back of your head points: pass on " +
+                                "the direction exactly as they say it." else ""
                     )
                     .put(
                         "parameters", JSONObject()
@@ -845,6 +869,7 @@ class GeminiLive(
                 "like that, it's just your name, never a question about options. "
         )
         append(settings.personality)
+        append("\n\n$TRUTHFUL")
         append(
             "\n\nAlways speak English. Answer in English even when what you hear sounds like another " +
                 "language or is unclear; never switch language on your own. Only speak another language " +
@@ -873,7 +898,11 @@ class GeminiLive(
         if (settings.vision) {
             append(
                 "\n\nYou can see through your camera with the look tool, but only look when " +
-                    "the person asks you to see something. To see what's on their desk, look down."
+                    "the person asks you to see something. To see what's on their desk, look down. " +
+                    "Taking the photo takes a moment, so as you look, say a few words so they know " +
+                    "it's happening (\"Let me have a look…\", \"Ooh, let me see\"), in your own words, " +
+                    "then wait for the photo. You only see what's in the photo you're given after " +
+                    "each look: never describe anything before it arrives or anything you haven't been shown."
             )
         }
         if (canSeeScreens()) {
@@ -1319,20 +1348,22 @@ class GeminiLive(
             return
         }
         val takePhoto = {
-            askCamera(false) { photo ->
+            askCamera(true) { photo ->
                 if (webSocket != socket) return@askCamera  // the conversation ended meanwhile
-                if (photo != null) {
-                    val data = Base64.encodeToString(photo, Base64.NO_WRAP)
-                    webSocket.send(
-                        """{"realtimeInput":{"video":{"mimeType":"image/jpeg","data":"$data"}}}"""
-                    )
+                val what = when {
+                    tilting -> "with your head tilted down toward their desk"
+                    down -> "straight ahead (you have no neck to tilt down, so the desk may not be in it)"
+                    else -> "straight ahead, at them"
                 }
-                val result = when {
-                    photo == null -> "Your camera isn't available right now."
-                    tilting -> "Here's the photo you just took, with your head tilted down toward the desk."
-                    down -> "You can't tilt down yet (no neck connected), so this photo is straight " +
-                        "ahead. If the desk isn't in view, ask them to hold the thing up to you."
-                    else -> "Here's the photo you just took."
+                // The photo goes into the conversation first, then the answer that it's there
+                if (photo != null) showPhoto(webSocket, photo, "This is the photo you just took with your camera, $what.")
+                val result = if (photo == null) {
+                    "You couldn't take a photo: your camera isn't available right now. Tell them you " +
+                        "can't see right now. Don't describe anything."
+                } else {
+                    "The photo you just took ($what) is in the conversation just above. $PHOTO_RULES" +
+                        if (down && !tilting) " If their desk isn't in the photo, tell them you can't see " +
+                            "it from here and offer to look if they hold things up to you." else ""
                 }
                 answerLook(webSocket, call, result)
                 status = "Listening… (tap to end)"
@@ -1353,7 +1384,7 @@ class GeminiLive(
     private fun canSeeScreens() = settings.screenLookOn &&
         (usingDesk() || settings.neckOn)
 
-    private fun usingDesk() = settings.deskOn && settings.deskAddress.isNotBlank()
+    private fun usingDesk() = settings.deskOn && settings.deskScreen && settings.deskAddress.isNotBlank()
 
     // Looks at the computer screen: with Orbit Desk if it's set up, otherwise by turning the
     // head to the screen and taking a sharp photo with its own camera
@@ -1366,27 +1397,32 @@ class GeminiLive(
             answerLook(webSocket, call, "You can't look at the screen right now: $problem. Tell them briefly.", "look_at_screen")
             return
         }
-        val askCamera = onLook
+        val askCamera = onScreenPhoto
         if (askCamera == null) {
             answerLook(webSocket, call, "Your camera isn't available right now.", "look_at_screen")
             return
         }
-        showExpression("looking_screen", 4500)  // the head turns to the screen (see Neck)
+        // The head turns to the screen (see Neck) and holds while the photo is taken; the back
+        // camera takes a little longer (switching cameras, focusing)
+        showExpression("looking_screen", if (settings.screenSpotBack) 6500 else 4500)
         status = "Looking at your screen…"
         thread(name = "look-screen") {
             Thread.sleep(1500)  // let the head get there and the camera settle
-            askCamera(true) { photo ->
+            askCamera { photo ->
                 if (webSocket != socket) return@askCamera
+                val camera = if (settings.screenSpotBack) "the camera on the back of your head" else "your camera"
                 if (photo != null) {
-                    val data = Base64.encodeToString(photo, Base64.NO_WRAP)
-                    webSocket.send("""{"realtimeInput":{"video":{"mimeType":"image/jpeg","data":"$data"}}}""")
+                    showPhoto(webSocket, photo, "This is the photo of their computer screen you just took with $camera.")
                 }
                 answerLook(
                     webSocket, call,
-                    if (photo != null) "Here's a photo of their screen, taken with your own camera after " +
-                        "turning your head to it. Text may be small or at an angle; if you can't read " +
-                        "something, say so and ask them to zoom in."
-                    else "Your camera isn't available right now.",
+                    if (photo != null) "The photo of their screen (taken with $camera, at an angle) is in " +
+                        "the conversation just above. $PHOTO_RULES Small text at an angle is often " +
+                        "unreadable: if you can't read something for certain, say so and ask them to zoom " +
+                        "in or read it out. If the photo doesn't show a screen at all, tell them, and " +
+                        "offer to find their screen again (find_screen)."
+                    else "You couldn't take a photo: your camera isn't available right now. Tell them " +
+                        "you can't see the screen right now. Don't describe anything.",
                     "look_at_screen"
                 )
                 status = "Listening… (tap to end)"
@@ -1403,16 +1439,33 @@ class GeminiLive(
             val picture = desk?.screenshot() ?: Result.failure(Exception("Orbit Desk isn't set up"))
             if (webSocket != socket) return@thread  // the conversation ended meanwhile
             picture.onSuccess { jpeg ->
-                val data = Base64.encodeToString(jpeg, Base64.NO_WRAP)
-                webSocket.send("""{"realtimeInput":{"video":{"mimeType":"image/jpeg","data":"$data"}}}""")
+                showPhoto(webSocket, jpeg, "This is a screenshot of their computer screen, just taken.")
             }
             val result = picture.fold(
-                onSuccess = { "Here's a picture of their computer screen, just taken." },
-                onFailure = { "You couldn't see the screen: ${it.message}. Tell them briefly." }
+                onSuccess = { "The screenshot of their screen is in the conversation just above. $PHOTO_RULES" },
+                onFailure = { "You couldn't see the screen: ${it.message}. Tell them briefly. Don't describe anything." }
             )
             answerLook(webSocket, call, result, "look_at_screen")
             status = "Listening… (tap to end)"
         }
+    }
+
+    // Puts a photo into the conversation, in order, so Gemini has it before it's told the look is
+    // done. (Sent as live video instead, a photo can arrive after Gemini has already started
+    // answering: live video is a separate stream, with no guarantee about what comes first.)
+    // turnComplete=false: it's context for the answer that follows, not a new question.
+    private fun showPhoto(webSocket: WebSocket, jpeg: ByteArray, caption: String) {
+        val data = Base64.encodeToString(jpeg, Base64.NO_WRAP)
+        val turn = JSONObject().put("role", "user").put(
+            "parts", JSONArray()
+                .put(JSONObject().put("text", "($caption)"))
+                .put(JSONObject().put("inlineData", JSONObject().put("mimeType", "image/jpeg").put("data", data)))
+        )
+        webSocket.send(
+            JSONObject().put(
+                "clientContent", JSONObject().put("turns", JSONArray().put(turn)).put("turnComplete", false)
+            ).toString()
+        )
     }
 
     private fun answerLook(webSocket: WebSocket, call: JSONObject, result: String, tool: String = "look") {

@@ -340,7 +340,8 @@ fun Face(
             offline = isOffline()
             // State colors on the eye border, only where they mean something:
             // red = not listening (privacy mode, or "shh"), violet = focus session,
-            // green = a timer running, amber = a reminder or calendar event coming up
+            // green = a timer running, amber = a reminder or calendar event coming up,
+            // blue = a coding agent on your computer is waiting for you
             val soonest = settings.soonestReminder(clock)
             val countdownColor = when {
                 soonest == null -> null
@@ -351,6 +352,7 @@ fun Face(
             val wanted = when {
                 mood == Mood.ASLEEP && isPrivate() -> STATE_RED
                 clock < sounds.hushedUntil -> STATE_RED
+                AgentNews.needsYou() && mood != Mood.ASLEEP -> STATE_BLUE
                 else -> countdownColor
             }
             if (wanted != null) stateColor = wanted

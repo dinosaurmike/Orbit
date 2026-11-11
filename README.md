@@ -27,13 +27,18 @@ flowchart LR
   gem["<b>Gemini Live API</b><br/>speech in, voice out,<br/>tool calls"]
   esp["<b>ESP32 neck</b><br/>Bluetooth LE peripheral"]
   servo["<b>Pan / tilt servos</b>"]
+  desk["<b>Orbit Desk</b> (optional)<br/>on your computer<br/>screenshots · agent news"]
+  agents["<b>Your coding agents</b><br/>Antigravity · Cursor · Codex<br/>Claude Code · scripts"]
   phone <-- "WebSocket: mic 16 kHz up, voice 24 kHz down" --> gem
   phone -- "BLE: M pan tilt, ~30/s" --> esp
   esp -- "eased PWM" --> servo
+  agents -- "MCP · hooks · command line" --> desk
+  phone <-- "home network: news, screenshots" --> desk
 ```
 
-- **The phone does everything it can locally.** Face tracking (ML Kit), the wake word (Vosk), the eyes,
-  memory, timers and reminders all run on the phone. Camera images never leave it unless you ask Orbit
+- **The phone does everything it can locally.** Face tracking (ML Kit), the wake word (a small model
+  trained just for its name, run with ONNX Runtime; [how it was made](tools/wakeword/README.md)), the
+  eyes, memory, timers and reminders all run on the phone. Camera images never leave it unless you ask Orbit
   to look at something.
 - **Gemini Live is the voice.** Each conversation is one WebSocket to the Gemini Live API: microphone
   audio streams up at 16 kHz and Orbit's voice streams back at 24 kHz, so you can interrupt it. Gemini
@@ -43,6 +48,10 @@ flowchart LR
   and sends short text lines (`M <pan> <tilt>`, about 30 a second while moving). The ESP32 eases each
   move (35% of the gap every 20 ms, at most 220°/s) and drives two hobby servos. Any BLE gadget that
   speaks the [neck protocol](docs/NECK_PROTOCOL.md) can be Orbit's body.
+- **Your coding agents can reach it.** [Orbit Desk](desk/README.md), a small Python program on your
+  computer, is an MCP server (and a command, and a local web endpoint), so any agent can tell you
+  it's done or needs you. The phone keeps one long-poll request open to it, so news arrives
+  instantly, and reports whether you're at your desk, so news waits until you're back.
 - **No Orbit servers.** Your phone talks straight to Google with your own key; there is no backend to
   shut down.
 
@@ -60,14 +69,16 @@ flowchart LR
   (and reacts to 👍 👎 ✌ 🤟, or goes quiet at a "shh" finger); bobs along to music.
 - Birthday confetti, Christmas snow, a Halloween glow.
 - The screen's edge glows a color when it matters: green for a timer, amber for a reminder,
-  violet while you focus, red when it isn't listening. A clear "offline" sign when the internet's down.
+  violet while you focus, blue when a coding agent is waiting for you, red when it isn't listening. A clear "offline" sign when the internet's down.
 
 **Talks with you**
-- Tap, or say **"Orbit"** / **"Orby"** (offline wake word). Interrupt it any time.
+- Tap, or say **"Orbit"** / **"Orby"** (its own wake word model, on the phone, reacting the moment
+  you finish its name), and it answers "Yes?" straight away. Interrupt it any time.
 - Gemini picks expressions as it talks: happy arches, surprise, a nod, a wink…
-- "What am I holding?" (camera), "what's on my desk?" (looks down), and "what do you think of
-  this?" (it **turns its head to your computer screen** and looks; nothing to install on the
-  computer, or use the optional [Orbit Desk](desk/README.md) for crisp text). Only when you ask.
+- "What am I holding?" (front camera), "what's on my desk?" (looks down), and "what do you think of
+  this?" (it **turns to your computer screen** and looks with its back camera, since it's facing
+  you; nothing to install on the computer, or use the optional [Orbit Desk](desk/README.md) for
+  crisp text). Only when you ask.
 - Reminders and timers, shown as a ring draining around one eye; focus sessions ("help me focus
   for 25 minutes"); your calendar's day, with a heads-up ring before each event.
 - Knows who's who: learns the faces of your household (on the phone) and greets each by name.
@@ -78,6 +89,15 @@ flowchart LR
 - Messages for your household: "tell Sarah dinner's ready", and it passes it on when it sees her
   (or she asks), then tells you she got it.
 - Knows the time and can search the web.
+
+**Works with your coding agents**
+- When Antigravity, Cursor, Codex, Claude Code or any script on your computer finishes, gets stuck
+  or needs your decision, Orbit looks at you and says so: "Codex is done: all tests pass."
+- Away from your desk? It keeps the news and tells you when it sees you back. A blue glow means an
+  agent is waiting on you.
+- Works with any agent: an MCP server, hooks, a command, or a local web request
+  ([set-up](desk/README.md#coding-agents)). Agents can only send short news and reactions: never
+  photos, sound or your screen.
 
 **Plays your music**
 - "Play some jazz", "something to focus to", "play rain": internet radio and its own soundscapes

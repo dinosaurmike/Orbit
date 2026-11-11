@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.AudioManager
 import android.os.Build
@@ -19,6 +20,8 @@ import androidx.annotation.OptIn
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -103,6 +106,15 @@ class MainActivity : ComponentActivity() {
     // Set when Gemini asks to look: the next camera frame becomes a photo and goes here
     @Volatile private var photoWanted: ((ByteArray?) -> Unit)? = null
     @Volatile private var photoSize = 768f  // longest side; bigger for reading a screen
+    // Real photos from the front camera, for "what am I holding?" and "what's on my desk?" (the
+    // face-tracking frames are only 640×480: too small to see things properly)
+    @Volatile private var frontCapture: ImageCapture? = null
+    // The back camera, switched on for a moment to look at the computer screen
+    private var backCapture: ImageCapture? = null
+    @Volatile private var backUsedAt = 0L
+    // News from coding agents on the computer (through Orbit Desk)
+    private lateinit var agents: AgentBridge
+    private var lastAgentSpeech = 0L
 
     // Dozing: awake, but nobody has been around for a while and no conversation is open
     private fun dozing() = !asleep && !gemini.active &&
@@ -164,6 +176,9 @@ class MainActivity : ComponentActivity() {
         // Orbit Desk on your computer, so it can look at your screen when you ask
         desk = DeskLink(settings)
         gemini.desk = desk
+        // News from coding agents and scripts on the computer, through Orbit Desk
+        agents = AgentBridge(settings, desk, ::agentStatus) { news -> runOnUiThread { onAgentNews(news) } }
+        agents.start()
 
         // Its own life: a little homework on its hobby once a day (checked below)
         life = InnerLife(settings) { gemini.key() }
@@ -172,7 +187,7 @@ class MainActivity : ComponentActivity() {
         // connected, so they can be watched on the Neck tab.
         neck = Neck(settings, tracker, gemini, NeckLink(this, settings))
         if (settings.neckOn && neck.link.hasPermission()) neck.link.start()
-        screenFinder = ScreenFinder(settings, neck, gemini)
+        screenFinder = ScreenFinder(settings, neck, gemini) { deliver -> snapBack(1280f, deliver) }
 
         // Keep track of the internet connection, so it can say plainly when it's offline
         watchInternet()
@@ -271,17 +286,11 @@ class MainActivity : ComponentActivity() {
 
         // "What am I holding?": hand the next camera frame to Gemini as a photo.
         // If no frame comes (the camera is off), give up after 3 seconds.
-        gemini.onLook = { sharp, deliver ->
-            photoSize = if (sharp) 1600f else 768f
-            photoWanted = deliver
-            lifecycleScope.launch {
-                delay(3000)
-                if (photoWanted === deliver) {
-                    photoWanted = null
-                    deliver(null)
-                }
-            }
+        // Screen photos with the back camera (null on phones without one: then the front camera)
+        gemini.onScreenPhoto = { deliver ->
+            if (settings.screenSpotBack) snapBack(2048f, deliver) else gemini.onLook?.invoke(true, deliver) ?: deliver(null)
         }
+        gemini.onLook = { sharp, deliver -> lookPhoto(if (sharp) 1600f else 768f, deliver) }
 
         // Things you can ask for out loud ("goodnight", "that's all", "louder"…)
         gemini.onCommand = { name, args -> runOnUiThread { voiceCommand(name, args) } }
@@ -339,6 +348,8 @@ class MainActivity : ComponentActivity() {
                 }
                 // Someone with messages waiting is in front of it: pass them on
                 deliverMessages(now)
+                // News from agents on the computer, kept until you're back at your desk
+                deliverAgentNews()
                 // Music: the sleep timer, and quieter only while a conversation is open
                 player.tick(now)
                 // Dozing for a while with nobody around: it really falls asleep (z's); seeing
@@ -502,11 +513,14 @@ class MainActivity : ComponentActivity() {
     private fun aimScreen(args: JSONObject) {
         val (pan, tilt) = neck.manualAim ?: (settings.screenPan to settings.screenTilt)
         val step = if (args.optString("amount") == "more") 10f else 4f
+        // With the back camera, they steer where the BACK of the head points: the face turns
+        // the opposite way
+        val flip = if (settings.screenSpotBack) -1f else 1f
         val (dPan, dTilt) = when (args.optString("direction")) {
-            "left" -> -step to 0f
-            "right" -> step to 0f
-            "up" -> 0f to -step * 0.7f
-            "down" -> 0f to step * 0.7f
+            "left" -> -step * flip to 0f
+            "right" -> step * flip to 0f
+            "up" -> 0f to -step * 0.7f * flip
+            "down" -> 0f to step * 0.7f * flip
             else -> 0f to 0f
         }
         val aim = (pan + dPan).coerceIn(-settings.panRange, settings.panRange) to
@@ -740,6 +754,8 @@ class MainActivity : ComponentActivity() {
         providerFuture.addListener({
             val provider = providerFuture.get()
             cameraProvider = provider
+            backCapture = null  // the front camera replaces it (unbindAll below)
+            frontCapture = null
             if (asleep && privacy) return@addListener
             val detector = FaceDetection.getClient(
                 FaceDetectorOptions.Builder()
@@ -753,7 +769,23 @@ class MainActivity : ComponentActivity() {
             analysis.setAnalyzer(cameraExecutor) { frame -> findFace(frame, detector) }
 
             provider.unbindAll()
-            provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, analysis)
+            // Face tracking plus real photos when asked; if this phone can't do both at once,
+            // just face tracking (looks then use a face-tracking frame)
+            frontCapture = try {
+                @Suppress("DEPRECATION")
+                val rotation = windowManager.defaultDisplay.rotation
+                val capture = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .setTargetRotation(rotation)
+                    .build()
+                provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, analysis, capture)
+                capture
+            } catch (e: Exception) {
+                Log.w("Orbit", "Front camera can't take photos while tracking; using frames", e)
+                provider.unbindAll()
+                provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, analysis)
+                null
+            }
         }, ContextCompat.getMainExecutor(this))
     }
 
@@ -1176,6 +1208,196 @@ class MainActivity : ComponentActivity() {
         return "$text)"
     }
 
+    // One photo from the front camera for Gemini to look at: a real photo if it can, otherwise
+    // the next face-tracking frame. `deliver` gets it (or null) exactly once, within 5 seconds.
+    private fun lookPhoto(maxSide: Float, deliver: (ByteArray?) -> Unit) {
+        val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        val once: (ByteArray?) -> Unit = { if (done.compareAndSet(false, true)) deliver(it) }
+        lifecycleScope.launch {
+            delay(5000)
+            if (photoWanted === once) photoWanted = null
+            once(null)
+        }
+        // A face-tracking frame (the old way, and the backup)
+        fun fromFrame() {
+            photoSize = maxSide
+            photoWanted = once
+        }
+        val capture = frontCapture
+        if (capture == null) {
+            fromFrame()
+            return
+        }
+        try {
+            capture.takePicture(cameraExecutor, object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(image: ImageProxy) {
+                    val jpeg = try {
+                        shrinkJpeg(image, maxSide)
+                    } finally {
+                        image.close()
+                    }
+                    if (jpeg != null) once(jpeg) else fromFrame()
+                }
+
+                override fun onError(e: ImageCaptureException) {
+                    Log.w("Orbit", "Front camera photo failed; using a frame", e)
+                    fromFrame()
+                }
+            })
+        } catch (e: Exception) {
+            Log.w("Orbit", "Front camera photo failed; using a frame", e)
+            fromFrame()
+        }
+    }
+
+    // ---- The back camera, for your computer screen ----
+    // The front camera (above the eyes) is for you: faces, gestures, "what am I holding?". The
+    // back camera looks the other way, so while Orbit faces you it points toward the screen
+    // behind or beside it. It's on only for a moment while Orbit looks at the screen (face
+    // tracking pauses), then the front camera comes straight back.
+    private fun hasBackCamera() = try {
+        cameraProvider?.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA) == true
+    } catch (e: Exception) {
+        false
+    }
+
+    // One photo from the back camera, longest side `maxSide` (null if it can't)
+    private fun snapBack(maxSide: Float, deliver: (ByteArray?) -> Unit) = runOnUiThread {
+        val provider = cameraProvider
+        if (provider == null || (asleep && privacy) || !hasBackCamera()) {
+            deliver(null)
+            return@runOnUiThread
+        }
+        val capture = backCapture ?: try {
+            @Suppress("DEPRECATION")
+            val rotation = windowManager.defaultDisplay.rotation
+            ImageCapture.Builder()
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                .setTargetRotation(rotation)
+                .build()
+                .also {
+                    provider.unbindAll()
+                    frontCapture = null
+                    provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, it)
+                    backCapture = it
+                }
+        } catch (e: Exception) {
+            Log.e("Orbit", "Couldn't switch to the back camera", e)
+            startCamera()
+            deliver(null)
+            return@runOnUiThread
+        }
+        backUsedAt = System.currentTimeMillis()
+        capture.takePicture(cameraExecutor, object : ImageCapture.OnImageCapturedCallback() {
+            override fun onCaptureSuccess(image: ImageProxy) {
+                val jpeg = try {
+                    shrinkJpeg(image, maxSide)
+                } finally {
+                    image.close()
+                }
+                deliver(jpeg)
+                backDone()
+            }
+
+            override fun onError(e: ImageCaptureException) {
+                Log.w("Orbit", "Back camera photo failed", e)
+                deliver(null)
+                backDone()
+            }
+        })
+    }
+
+    // Back to the front camera once no more screen photos follow (a search takes several)
+    private fun backDone() {
+        val at = System.currentTimeMillis()
+        backUsedAt = at
+        lifecycleScope.launch {
+            delay(3000)
+            if (backUsedAt == at && backCapture != null) startCamera()
+        }
+    }
+
+    // A full-size camera JPEG, made smaller and turned the right way up
+    private fun shrinkJpeg(image: ImageProxy, maxSide: Float): ByteArray? = try {
+        val buffer = image.planes[0].buffer
+        val bytes = ByteArray(buffer.remaining()).also { buffer.get(it) }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
+        val picture = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+        val turn = Matrix().apply { postRotate(image.imageInfo.rotationDegrees.toFloat()) }
+        val shrink = maxSide / max(picture.width, picture.height)
+        if (shrink < 1f) turn.postScale(shrink, shrink)
+        val upright = Bitmap.createBitmap(picture, 0, 0, picture.width, picture.height, turn, true)
+        ByteArrayOutputStream().use { out ->
+            upright.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            out.toByteArray()
+        }
+    } catch (e: Exception) {
+        Log.e("Orbit", "Couldn't make the screen photo", e)
+        null
+    }
+
+    // ---- News from coding agents on the computer ----
+
+    private fun personHere() = tracker.seesFace() || System.currentTimeMillis() - tracker.lastSeen < 10_000
+
+    // How it's doing, sent with each "anything new?" so agents can decide whether to wait
+    private fun agentStatus(): Map<String, String> {
+        val now = System.currentTimeMillis()
+        fun flag(on: Boolean) = if (on) "1" else "0"
+        return mapOf(
+            "present" to flag(!asleep && personHere()),
+            "seen" to (if (tracker.lastSeen == 0L) 99_999L else ((now - tracker.lastSeen) / 1000).coerceAtMost(99_999L)).toString(),
+            "asleep" to flag(asleep),
+            "talking" to flag(gemini.active),
+            "focus" to flag(settings.focusing()),
+            "waiting" to AgentNews.count().toString()
+        )
+    }
+
+    private fun onAgentNews(news: List<AgentEvent>) {
+        for (e in news) {
+            if (e.kind == "express") {
+                // Just a reaction (a nod, a little celebration), when it would be seen
+                if (!asleep && !showSettings && personHere()) gemini.showExpression(e.move, 1600)
+            } else {
+                AgentNews.add(e)
+            }
+        }
+        deliverAgentNews()
+    }
+
+    // Tells you the news once you're there to hear it: straight away if you're at your desk,
+    // otherwise when it next sees you. Waits while a conversation is open or it's asleep.
+    // Focus session: finished/FYI news is shown quietly; "needs you" and problems still speak.
+    private fun deliverAgentNews() {
+        if (AgentNews.count() == 0 || asleep || showSettings || gemini.active || !personHere()) return
+        val now = System.currentTimeMillis()
+        // It came while you were away: you've just sat back down, after the news arrived
+        val away = AgentNews.firstWaitingSince in 1 until tracker.arrivedAt
+        val news = AgentNews.takeAll()
+        val urgent = news.any { it.kind == "needs_input" || it.kind == "failed" }
+        val (move, sound) = when {
+            news.any { it.kind == "needs_input" } -> "alert" to Sound.CHIME
+            news.any { it.kind == "failed" } -> "sad" to Sound.BLIP
+            news.any { it.kind == "done" } -> "happy" to Sound.TWINKLE
+            else -> "perk" to Sound.BLIP
+        }
+        tracker.touched()  // it's looking at you now
+        gemini.showExpression(move, 2200)
+        val quiet = settings.focusing() && !urgent
+        if (quiet) return
+        sounds.play(sound, 0.4f)
+        if (settings.agentSpeak && gemini.hasKey() && now - lastAgentSpeech > 8_000) {
+            lastAgentSpeech = now
+            player.duck()
+            maybeCalledAt = now + 6000  // keeps the music down while it speaks
+            replies.say(gemini.key(), settings.voice, AgentNews.spoken(news, away))
+        }
+    }
+
     // Turns a camera frame into a small JPEG photo, the right way up
     private fun takePhoto(frame: ImageProxy): ByteArray? = try {
         val picture = frame.toBitmap()
@@ -1194,6 +1416,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        agents.stop()
         cameraExecutor.shutdown()
         peopleExecutor.shutdown()
         neck.link.stop()

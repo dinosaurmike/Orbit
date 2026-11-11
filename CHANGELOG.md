@@ -2,6 +2,35 @@
 
 ## 0.1.1 (unreleased)
 
+- Fixed: Orbit could describe things it hadn't seen (asked "what's on my desk?", it made things
+  up). Photos were sent to Gemini as live video, a separate stream with no guarantee it arrives
+  before Gemini answers, so Gemini sometimes answered without the photo. Now each photo goes into
+  the conversation itself, in order, before Gemini is told the look is done. Looks also use a real
+  photo from the camera instead of a small 640×480 face-tracking frame.
+- Truthful, always: Orbit's instructions now put honesty above being helpful or playful. It never
+  guesses, invents or fills in gaps; when it can't see, can't read or doesn't know, it says so,
+  warmly ("I can't quite tell. Can you give me some clues?"). It says a quick "let me have a
+  look…" while it takes a photo, so you know something's happening.
+  Every photo and screenshot comes with the same rule, and if a look fails it's told to say it
+  can't see rather than describe anything. "Find my screen" only picks a photo that clearly shows
+  a screen.
+- Works with your coding agents. When Antigravity, Cursor, Codex, Claude Code or any script on the
+  computer finishes, gets stuck or needs your decision, Orbit looks at you and says so ("Codex is
+  done: all tests pass"). Away from your desk? It tells you when it sees you back; a blue glow
+  means an agent is waiting on you. Agent-agnostic: Orbit Desk is now an MCP server
+  (`orbit_notify`, `orbit_status`, `orbit_express`), a hook for agents that have hooks, a command
+  (`orbit_desk.py notify done "…"`) and a local web endpoint. Agents can only reach it from the
+  computer itself, and only send short news and reactions. Orbit says the news with Gemini's voice
+  alone (no conversation, no tools). Settings → Computer.
+- Looks at your computer screen with the back camera: Orbit faces you, so your screen is usually
+  behind or beside it. The front camera stays on you (faces, gestures, "what am I holding?").
+  "Find my screen" searches with the back camera too: face bowed down (so the back camera looks
+  up, where screens usually are), then level, sweeping side to side; "a bit left" now steers the
+  back of its head. Switch it off in Settings → Computer if your screen is in front of Orbit.
+- Orbit Desk is its own setting now (it no longer needs screen looks switched on), with a choice
+  of using it for screenshots, agent news, or both.
+- Smaller download: the release APK only includes phone processors (ARM), not PC-emulator copies.
+- Orbit Desk tests (23) run on Windows, macOS and Linux with Python 3.9 and 3.13.
 - A fast ear for its own name: a small model trained just for "Orbit", "Orby" and "Or-bee"
   (openWakeWord's method, on about 10,000 synthetic voices plus sound-alikes like "orange", "Robbie"
   and "a bit"). It checks the last 1.3 seconds of sound every 80 ms, so it reacts the moment you

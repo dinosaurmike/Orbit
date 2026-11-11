@@ -55,6 +55,11 @@ android {
             // Published builds never contain a key: people enter their own in settings
             buildConfigField("String", "GEMINI_API_KEY", "\"\"")
             if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
+            // Phones only (64- and 32-bit ARM): the x86 copies of the native libraries are for PC
+            // emulators and would double the download. Debug builds keep them for emulators.
+            ndk {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            }
             // Code shrinking is off: shrinking only part of the app (Kotlin + AndroidX) made OkHttp
             // crash at start-up (IllegalAccessError on a renamed kotlin.text class) in 0.1.0
             optimization {
