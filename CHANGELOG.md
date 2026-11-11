@@ -2,6 +2,22 @@
 
 ## 0.1.1 (unreleased)
 
+- Smooth wake-up: hearing its name no longer makes the eyes stutter. Two things used to happen in
+  the same instant: the phone switched into call mode on the thread that draws the eyes (a slow
+  system call that froze them for a moment), and a quick "wake" flash fought the switch to the
+  listening look. Now call mode switches on the sound thread, the eyes stay calm while it
+  connects, then glide from idle into listening over half a second (slow start, soft landing),
+  with the head lifting slightly in step. A tap still makes the eyes attentive straight away.
+- Say it all in one go: "Orby, what time is it?" From the moment it hears its name, everything
+  you say is kept and passed to Gemini as soon as it's connected (before, the first second or so
+  was thrown away). It only says "Yes?" if you pause after its name; if you carry straight on, it
+  just listens. No greeting either: it answers what you asked. The eyes still react the instant
+  it hears its name. (Tested: the fast ear still catches 95% of names said with a request
+  straight after, about 66 ms after the name ends.)
+- Quick replies are "Yes?", "Mm-hm?" and "I'm listening." ("What's up?" and "Hey!" sounded like
+  a greeting cutting in.)
+- Fixed: it sometimes said its own expression out loud ("happy face") after making one. Its
+  instructions now say expressions are silent body language, and that tools work silently.
 - Fixed: Orbit could describe things it hadn't seen (asked "what's on my desk?", it made things
   up). Photos were sent to Gemini as live video, a separate stream with no guarantee it arrives
   before Gemini answers, so Gemini sometimes answered without the photo. Now each photo goes into

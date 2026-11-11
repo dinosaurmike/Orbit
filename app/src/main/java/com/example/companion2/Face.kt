@@ -398,6 +398,15 @@ fun Face(
                 }
             }
             if (mood == Mood.ASLEEP && isPrivate()) targetGlow *= 0.7f  // privacy: a bit darker still
+            // Just woken by its name and now connected: ease from the idle look into listening
+            // over half a second, rather than switching (see GeminiLive.listeningGlide)
+            val listenGlide = gemini.listeningGlide(clock)
+            val gliding = listenGlide < 1f && (mood == Mood.LISTENING || mood == Mood.HEARING)
+            if (gliding) {
+                targetGrow = 1f + (targetGrow - 1f) * listenGlide
+                targetSquint = 1f + (targetSquint - 1f) * listenGlide
+                targetGlow = 1f + (targetGlow - 1f) * listenGlide
+            }
             sleepZ += ((if (mood == Mood.ASLEEP) 1f else 0f) - sleepZ) * 0.04f
 
             // Expression from Gemini or its own habits (not while asleep; only a yawn while dozing)
@@ -442,7 +451,12 @@ fun Face(
             targetGrow = pose.grow
             targetSquint = pose.squint
             targetGlow = pose.glow
-            val targetTilt = if (shown == null && listeningIn) 5f else pose.tilt
+            val targetTilt = when {
+                shown == null && listeningIn -> 5f
+                // Was listening in (head tilted) when it woke: untilt along the same glide
+                shown == null && gliding && settings.habits && tracker.seesFace() -> 5f * (1f - listenGlide)
+                else -> pose.tilt
+            }
             // You're smiling at it: it smiles back. A talking mouth looks like a smile to the
             // face detector, so only a smile held for a second while you're quiet counts.
             if (mic.level > settings.voiceThreshold || mood == Mood.HEARING) lastVoiceAt = clock

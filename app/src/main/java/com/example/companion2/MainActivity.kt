@@ -267,16 +267,19 @@ class MainActivity : ComponentActivity() {
                 if (!showSettings && !asleep && !gemini.active && gemini.hasKey()) {
                     tracker.touched()
                     sounds.hushedUntil = 0L  // calling it by name ends a "shh"
-                    gemini.showExpression("wake", 1400)  // a quick, bright "yes?" while it connects
+                    // The eyes stay calm while it connects, then glide into listening as one smooth
+                    // movement (see GeminiLive.listeningGlide): no flash on top of it, which made
+                    // two animations fight and the eyes stutter
                     player.duck()
-                    // ...and says it out loud, in its own voice, without waiting for Gemini. It plays
-                    // once the conversation has set up its speaker (call mode), so it isn't cut off.
-                    val clip = if (settings.wakeReply) replies.replyClip(settings.voice) else null
-                    val clipMs = clip?.let { it.size / 2 * 1000L / VoiceSamples.SAMPLE_RATE } ?: 0L
-                    if (clip != null) sounds.repliedAt = System.currentTimeMillis()  // no chime as well
+                    // Starts listening straight away: whatever you say next is kept and passed on as
+                    // soon as it's connected ("Orby, what time is it?" in one go)
+                    val now = System.currentTimeMillis()
+                    sounds.repliedAt = now + 2000  // no "listening" chime over you as it connects
                     if (settings.wakeReply) replies.prepareReplies(gemini.key(), settings.voice)
-                    gemini.start(fromWakeWord = true, quietMs = clipMs)
-                    if (clip != null) gemini.sayNow(clip)
+                    gemini.start(fromWakeWord = true, fastEar = wake.fastEarActive)
+                    // It only says "Yes?" if you pause after its name (see checkReply)
+                    replyLoud = 0
+                    replyWantedAt = if (settings.wakeReply) now else 0L
                 }
             }
         }
@@ -303,6 +306,8 @@ class MainActivity : ComponentActivity() {
         // Your voice goes to Gemini whenever a conversation is open
         mic.onSound = { sound, level ->
             gemini.sendSound(sound, level)
+            // Just woken by its name: say "Yes?" only if you pause
+            if (replyWantedAt != 0L) checkReply(level)
             // Between conversations, listen (on the phone only) for the wake phrase
             if (settings.wakeWordOn && !gemini.active && !asleep) wake.listen(sound)
             // ...and if you start talking while facing it, the eyes perk up straight away: before
@@ -1440,6 +1445,33 @@ class MainActivity : ComponentActivity() {
 
     // You started talking (after half a second of quiet) while it can see you: perk up at once.
     // At most every 2.5 seconds, and only when someone's there, so a radio in an empty room doesn't.
+    // After its name: if you carry straight on ("Orby, what time is it?"), it just listens; if you
+    // pause for half a second, it says "Yes?" in its own voice so you know it's listening.
+    // (The eyes have already reacted the moment it heard its name.) On the microphone's thread.
+    @Volatile private var replyWantedAt = 0L
+    private var replyLoud = 0
+    private fun checkReply(level: Float) {
+        val at = replyWantedAt
+        if (at == 0L) return
+        if (!gemini.active) {
+            replyWantedAt = 0L
+            return
+        }
+        // Two loud moments in a row (0.1 s): that's you talking, not a click
+        replyLoud = if (level > settings.voiceThreshold) replyLoud + 1 else 0
+        if (replyLoud >= 2) {
+            replyWantedAt = 0L
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (now - at >= 500) {
+            replyWantedAt = 0L
+            val clip = replies.replyClip(settings.voice) ?: return
+            sounds.repliedAt = now
+            gemini.sayNow(clip)
+        }
+    }
+
     private fun noticeVoice(level: Float) {
         val now = System.currentTimeMillis()
         if (level < settings.voiceThreshold) {

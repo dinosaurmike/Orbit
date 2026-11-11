@@ -63,6 +63,8 @@ class WakeWord(private val context: Context, private val settings: Settings) {
     private val queued = AtomicInteger(0)
     @Volatile private var model: Model? = null
     @Volatile private var ear: OrbitEar? = null
+    // Listening with its own fast model right now (not the speech recognizer)
+    val fastEarActive get() = ear != null && settings.fastWake && onlyOrbitNames(settings.wakePhrase)
     // Only touched on the worker thread: when the fast ear last fired or last thought "maybe"
     private var earFiredAt = 0L
     private var earMaybeAt = 0L

@@ -244,6 +244,9 @@ class Neck(
             gesturePan += 7f * musicSway  // ...and a sway, like dancing
             // Thinking: only the eyes glance up (see Face); the head stays on you
             if (mood == Mood.SPEAKING) gestureTilt -= 3f * gemini.voiceLevel()  // bob with the voice
+            // Listening: the head lifts a little, attentive. After its name, this eases in along
+            // the same half-second glide as the eyes, so head and eyes move as one.
+            if (mood == Mood.LISTENING || mood == Mood.HEARING) gestureTilt -= 2.5f * gemini.listeningGlide(now)
             // Expressions and idle moves move the head too (see Expressions.kt)
             val latest = gemini.expression()
             val shown = when {

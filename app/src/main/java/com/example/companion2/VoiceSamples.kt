@@ -408,7 +408,8 @@ class VoiceSamples(private val context: Context) {
         private const val CACHE_VERSION = "v2-"
         // How recording the quick replies is going, for the settings screen
         @Volatile var replyStatus = ""
-        // What it says when it hears its name (one at random)
-        val REPLY_LINES = listOf("Yes?", "Mm-hm?", "I'm listening.", "What's up?", "Hey!")
+        // What it says when it hears its name and you pause (one at random): short, and never a
+        // greeting, so it doesn't feel like it's interrupting
+        val REPLY_LINES = listOf("Yes?", "Mm-hm?", "I'm listening.")
     }
 }

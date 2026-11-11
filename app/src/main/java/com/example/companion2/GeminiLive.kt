@@ -26,6 +26,9 @@ const val TRUTHFUL = "Be truthful, always. Never guess, invent, assume or fill i
     "a better look is always better than a guess. This matters more than being helpful, quick or " +
     "playful."
 
+// After its name, the eyes glide from idle into listening over this long once it's connected
+const val LISTEN_GLIDE_MS = 500L
+
 // Sent with every photo and screenshot it looks at
 const val PHOTO_RULES = "Describe only what you can clearly see in that photo. Never guess or invent " +
     "objects, text, colours or details that aren't clearly visible, and never fill in what's " +
@@ -136,6 +139,13 @@ class GeminiLive(
     @Volatile private var usingNatural = false
     // Started by the wake word: skip the first moment of sound (the end of its name)
     @Volatile private var skipChunks = 0
+    // Started by its name: they'll usually go straight on with what they want ("Orby, what time
+    // is it?"), so no greeting, just an answer
+    @Volatile private var wokenByName = false
+    // While Orbit says its own quick "Yes?", the microphone hears it: don't pass that on as yours
+    @Volatile private var muteUntil = 0L
+    // When the conversation was ready (connected and set up), for the eyes' glide into listening
+    @Volatile private var readyAt = 0L
 
     // True when a neck is connected, so the camera can really tilt down to see the desk
     @Volatile var canLookDown: () -> Boolean = { false }
@@ -163,8 +173,10 @@ class GeminiLive(
 
     // Works out what the conversation is doing, for the eyes
     fun mood(): Mood {
-        // Still connecting: look attentive straight away, so a tap or "Orby" feels instant
-        if (!ready) return if (socket != null) Mood.LISTENING else Mood.IDLE
+        // Still connecting. After a tap: look attentive straight away (the tap is the trigger, so
+        // it should answer at once). After its name: stay calm until it's connected, then glide
+        // into listening (see listeningGlide), as one smooth movement instead of a jumpy double one.
+        if (!ready) return if (socket != null && !wokenByName) Mood.LISTENING else Mood.IDLE
         if (speaker.busy()) {
             waitingForReply = false
             return Mood.SPEAKING
@@ -178,6 +190,14 @@ class GeminiLive(
         return Mood.LISTENING
     }
 
+    // How far the eyes (and head) have eased from idle into listening, 0..1, after waking by name:
+    // half a second from when it's connected, slow at the start and the end. 1 the rest of the time.
+    fun listeningGlide(now: Long = System.currentTimeMillis()): Float {
+        if (!wokenByName || !ready) return 1f
+        val t = ((now - readyAt) / LISTEN_GLIDE_MS.toFloat()).coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
+    }
+
     // The expression currently showing and how far through it is (0..1), or null
     fun expression(): Pair<String, Float>? {
         val name = expression ?: return null
@@ -187,7 +207,10 @@ class GeminiLive(
 
     // Plays a sound in Orbit's voice straight away (its quick "Yes?"), through the same speaker
     // the conversation uses
-    fun sayNow(pcm: ByteArray) = speaker.play(pcm)
+    fun sayNow(pcm: ByteArray) {
+        muteUntil = System.currentTimeMillis() + pcm.size / 2 * 1000L / VoiceSamples.SAMPLE_RATE + 150
+        speaker.play(pcm)
+    }
 
     // "Shh": stop talking right now (the conversation stays open)
     fun hush() {
@@ -206,12 +229,16 @@ class GeminiLive(
     }
 
     // Opens a conversation. If greet is given, Orbit speaks first.
-    // `quietMs`: how long Orbit is saying "Yes?" itself, so that isn't sent to Gemini as your words
-    fun start(greet: String? = null, fromWakeWord: Boolean = false, quietMs: Long = 0) {
+    // From the wake word, everything you say from the moment it hears its name is kept and passed
+    // on once it's connected, so you can say it all in one go ("Orby, what time is it?").
+    // `fastEar`: its own wake word model fires ~70 ms after the name ends, so only 100 ms is
+    // skipped (the very end of the name); the speech recognizer is later, 200 ms.
+    fun start(greet: String? = null, fromWakeWord: Boolean = false, fastEar: Boolean = true) {
         if (socket != null) return
         connectStartedAt = System.currentTimeMillis()
-        // 8 × 50 ms: the end of its name; then as long as its own reply lasts
-        skipChunks = if (fromWakeWord) maxOf(8, (quietMs / 50).toInt() + 3) else 0
+        skipChunks = if (fromWakeWord) (if (fastEar) 2 else 4) else 0
+        // (A quiet retry after a network hiccup keeps what it was)
+        if (fromWakeWord) wokenByName = greet == null else if (greet != null) wokenByName = false
         val apiKey = currentKey()
         if (apiKey.isBlank()) {
             status = "No Gemini API key yet  ·  —  settings"
@@ -268,6 +295,8 @@ class GeminiLive(
         ready = false
         resumeHandle = null  // the next conversation starts fresh
         greeting = null
+        wokenByName = false
+        muteUntil = 0L
         synchronized(earlySound) { earlySound.clear() }
         speaker.stop()
         speaker.endConversation()
@@ -354,6 +383,7 @@ class GeminiLive(
 
     // Called with each 50 ms of your voice
     fun sendSound(sound: ByteArray, level: Float) {
+        if (System.currentTimeMillis() < muteUntil) return  // its own "Yes?"
         if (!ready) {
             // Still connecting: hold on to up to 5 seconds of sound (but not the end of its name,
             // when the wake word started it: that's what made it hear "or B")
@@ -870,6 +900,13 @@ class GeminiLive(
         )
         append(settings.personality)
         append("\n\n$TRUTHFUL")
+        if (wokenByName) {
+            append(
+                "\n\nThey've just called you by name to start this conversation, and usually say what " +
+                    "they want in the same breath. Don't greet them or say hello: answer what they ask " +
+                    "straight away. If they haven't asked anything yet, wait quietly for them to."
+            )
+        }
         append(
             "\n\nAlways speak English. Answer in English even when what you hear sounds like another " +
                 "language or is unclear; never switch language on your own. Only speak another language " +
@@ -883,9 +920,16 @@ class GeminiLive(
             append(
                 "\n\nYou have expressive eyes. Call the express tool often and naturally while " +
                     "you talk, the way a face reacts in conversation: happy when pleased, " +
-                    "surprised by news, curious when asking, nod when agreeing. Never mention the tool."
+                    "surprised by news, curious when asking, nod when agreeing. Expressions are silent " +
+                    "body language: never say an expression's name or describe what your eyes or head " +
+                    "are doing (never \"happy face\", \"nod\", \"wink\"), and never mention the tool. " +
+                    "When they ask you to make a face, just make it, and say something natural or nothing."
             )
         }
+        append(
+            "\n\nYour tools work silently in the background. Never say a tool's name, its settings or " +
+                "its result word for word; just carry on talking naturally."
+        )
         if (usingSearch) append("\n\nYou can search the web for current information like news and scores.")
         append(
             "\n\nFor the weather, always use get_weather (never search). " + if (settings.weatherTown.isBlank()) {
@@ -1054,7 +1098,7 @@ class GeminiLive(
     // NON_BLOCKING means it keeps talking while the eyes act it out.
     private fun expressTool() = JSONObject()
         .put("name", "express")
-        .put("description", "Show a feeling or gesture with your eyes.")
+        .put("description", "Show a feeling or gesture with your eyes. Silent: never say the expression's name out loud.")
         .put(
             "parameters", JSONObject()
                 .put("type", "object")
@@ -1073,6 +1117,7 @@ class GeminiLive(
         if (webSocket != socket) return  // message from an old conversation
         val message = JSONObject(text)
         if (message.has("setupComplete")) {
+            readyAt = System.currentTimeMillis()
             ready = true
             retries = 0
             lastActivity = System.currentTimeMillis()
@@ -1519,6 +1564,8 @@ class GeminiLive(
         ready = false
         resumeHandle = null
         greeting = null
+        wokenByName = false
+        muteUntil = 0L
         synchronized(earlySound) { earlySound.clear() }
         speaker.stop()
         speaker.endConversation()

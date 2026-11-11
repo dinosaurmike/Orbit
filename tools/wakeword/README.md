@@ -64,6 +64,9 @@ venv/bin/python train.py out 15000 10 4096 5e-4
 venv/bin/python export.py out/step15000.pt out/orbit.onnx
 # Check the phone's streaming code gives the same scores as openWakeWord's own
 venv/bin/python stream_test.py out/orbit.onnx
+# Name and request in one breath, same voice ("Hey Orby, what time is it?")
+venv/bin/python gen_pair.py pos.txt cont.txt clips/pairTest.npz 300 21 800 904
+venv/bin/python pair_test.py out/orbit.onnx clips/pairTest.npz
 ```
 
 `train.py` prints, every 1,000 steps and for each threshold: how many held-out names it catches
@@ -78,6 +81,7 @@ data, the second half is only ever used to count false wakes.
 |---|---|
 | Names caught, 100 voices never heard in training (noisy, echoey) | 79% ("Hey Orbit" 84%, "Hi Orbit" 92%, "Or-bee" 60%) |
 | Names caught in a 3-minute continuous stream | 29 of 30, about 40 ms after the name ends |
+| Name with a request straight after ("Orby, what time is it?"), 300 new voices | 95% (97% with a pause after the name), about 66 ms after the name ends |
 | False wakes, 5.3 hours of held-out conversation and music | 1 (0.19 per hour) |
 | Sound-alikes that fool it ("orange", "Robbie", "a bit"…) | 0.6% |
 | Phone code (`OrbitEar.kt`) vs openWakeWord's reference | same scores (difference under 0.000001) |

@@ -11,6 +11,7 @@ import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
 import android.os.Build
+import android.util.Log
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.Executors
@@ -103,29 +104,44 @@ class Speaker(private val audio: AudioManager) {
     // Orbit's own voice from the microphone. That's what lets you interrupt it.
     @Volatile private var callMode = false
 
+    // Switching into (and out of) call mode can take a noticeable moment on some phones, so it's
+    // done on the sound thread: never on the main thread, where it would make the eyes stutter.
+    // The same thread plays the voice, so the switch always finishes before any of it plays.
     fun beginConversation(call: Boolean) {
         callMode = call
         if (!call) return
-        audio.mode = AudioManager.MODE_IN_COMMUNICATION
-        // Use the loudspeaker, not the earpiece you'd hold to your ear
-        if (Build.VERSION.SDK_INT >= 31) {
-            audio.availableCommunicationDevices
-                .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-                ?.let { audio.setCommunicationDevice(it) }
-        } else {
-            audio.isSpeakerphoneOn = true
+        audioThread.execute {
+            try {
+                audio.mode = AudioManager.MODE_IN_COMMUNICATION
+                // Use the loudspeaker, not the earpiece you'd hold to your ear
+                if (Build.VERSION.SDK_INT >= 31) {
+                    audio.availableCommunicationDevices
+                        .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                        ?.let { audio.setCommunicationDevice(it) }
+                } else {
+                    audio.isSpeakerphoneOn = true
+                }
+            } catch (e: Exception) {
+                Log.w("Orbit", "Couldn't switch to call mode", e)
+            }
         }
     }
 
     fun endConversation() {
         if (!callMode) return
         callMode = false
-        if (Build.VERSION.SDK_INT >= 31) {
-            audio.clearCommunicationDevice()
-        } else {
-            audio.isSpeakerphoneOn = false
+        audioThread.execute {
+            try {
+                if (Build.VERSION.SDK_INT >= 31) {
+                    audio.clearCommunicationDevice()
+                } else {
+                    audio.isSpeakerphoneOn = false
+                }
+                audio.mode = AudioManager.MODE_NORMAL
+            } catch (e: Exception) {
+                Log.w("Orbit", "Couldn't leave call mode", e)
+            }
         }
-        audio.mode = AudioManager.MODE_NORMAL
     }
 
     fun play(sound: ByteArray) {
