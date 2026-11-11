@@ -196,41 +196,18 @@ class VoiceSamples(private val context: Context) {
         }
     }
 
-    // Says one of the replies, picked at random, straight away. Returns how long it lasts (ms),
-    // or 0 if this voice has none recorded yet.
-    fun playReply(voice: String): Long {
+    // One of the replies, picked at random, ready to play (24 kHz, 16-bit mono, the same as
+    // Gemini's voice), or null if this voice has none recorded yet. It's played through the
+    // conversation's own speaker (GeminiLive.sayNow), because the phone switches to call mode as the
+    // conversation opens, and a separate player gets muted by that switch on some phones.
+    fun replyClip(voice: String): ByteArray? {
         val ready = REPLY_LINES.map { replyFile(voice, it) }.filter { it.exists() }
-        if (ready.isEmpty()) return 0
-        val pcm = smooth(ready.random().readBytes())
+        if (ready.isEmpty()) return null
         return try {
-            val t = AudioTrack.Builder()
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build()
-                )
-                .setAudioFormat(
-                    AudioFormat.Builder()
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setSampleRate(SAMPLE_RATE)
-                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                        .build()
-                )
-                .setBufferSizeInBytes(pcm.size)
-                .setTransferMode(AudioTrack.MODE_STATIC)  // all loaded up front: starts at once
-                .build()
-            t.write(pcm, 0, pcm.size)
-            t.play()
-            val ms = pcm.size / 2 * 1000L / SAMPLE_RATE
-            thread(name = "wake-reply-done") {
-                Thread.sleep(ms + 300)
-                t.release()
-            }
-            ms
+            smooth(ready.random().readBytes())
         } catch (e: Exception) {
-            Log.w("Orbit", "Couldn't play the quick reply", e)
-            0
+            Log.w("Orbit", "Couldn't read a quick reply", e)
+            null
         }
     }
 

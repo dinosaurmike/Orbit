@@ -98,6 +98,8 @@ dependencies {
     // Wake word: Vosk, a free offline speech recognizer (plus JNA, which it needs to run)
     implementation("com.alphacephei:vosk-android:0.3.75@aar")
     implementation("net.java.dev.jna:jna:5.18.1@aar")
+    // Fast wake word: Orbit's own small model for its name (ONNX Runtime runs it on the phone)
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.22.0")
     // On-phone hand gestures and recognizing who's who (Google MediaPipe; models download on first use)
     implementation("com.google.mediapipe:tasks-vision:0.10.26")  // 0.10.26+ supports 16 KB page sizes (needed for Google Play)
 

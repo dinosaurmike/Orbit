@@ -254,11 +254,14 @@ class MainActivity : ComponentActivity() {
                     sounds.hushedUntil = 0L  // calling it by name ends a "shh"
                     gemini.showExpression("wake", 1400)  // a quick, bright "yes?" while it connects
                     player.duck()
-                    // ...and says it out loud, in its own voice, without waiting for Gemini
-                    val replyMs = if (settings.wakeReply) replies.playReply(settings.voice) else 0L
-                    if (replyMs > 0) sounds.repliedAt = System.currentTimeMillis()
+                    // ...and says it out loud, in its own voice, without waiting for Gemini. It plays
+                    // once the conversation has set up its speaker (call mode), so it isn't cut off.
+                    val clip = if (settings.wakeReply) replies.replyClip(settings.voice) else null
+                    val clipMs = clip?.let { it.size / 2 * 1000L / VoiceSamples.SAMPLE_RATE } ?: 0L
+                    if (clip != null) sounds.repliedAt = System.currentTimeMillis()  // no chime as well
                     if (settings.wakeReply) replies.prepareReplies(gemini.key(), settings.voice)
-                    gemini.start(fromWakeWord = true, quietMs = replyMs)
+                    gemini.start(fromWakeWord = true, quietMs = clipMs)
+                    if (clip != null) gemini.sayNow(clip)
                 }
             }
         }

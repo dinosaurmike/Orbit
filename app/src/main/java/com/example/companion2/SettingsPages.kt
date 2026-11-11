@@ -150,6 +150,16 @@ fun OrbitPage(
     }
     if (settings.wakeWordOn) {
         SwitchSetting(
+            "Fast ear for its name",
+            "A small model trained just for \"Orbit\", \"Orby\" and \"Or-bee\": it reacts the moment " +
+                "you finish saying the name. Turn off to use the slower speech recognizer instead " +
+                "(needed for other wake words).",
+            settings.fastWake
+        ) {
+            settings.fastWake = it
+            wake.prepare()
+        }
+        SwitchSetting(
             "Answer \"Yes?\" when called",
             "Says a quick \"Yes?\" or \"Mm-hm?\" in its own voice the moment it hears its name. Recorded " +
                 "once in your chosen voice and kept on the phone.",

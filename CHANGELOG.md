@@ -2,11 +2,21 @@
 
 ## 0.1.1 (unreleased)
 
+- A fast ear for its own name: a small model trained just for "Orbit", "Orby" and "Or-bee"
+  (openWakeWord's method, on about 10,000 synthetic voices plus sound-alikes like "orange", "Robbie"
+  and "a bit"). It checks the last 1.3 seconds of sound every 80 ms, so it reacts the moment you
+  finish the name instead of waiting for the speech recognizer (about 40 ms after the name ends, in
+  tests). Caught 79% of names from 100 voices it never trained on, with one false wake in 5.3 hours
+  of other people's conversations. Runs on the phone; other wake words still use the speech
+  recognizer. Settings → Talk → "Fast ear for its name". Training scripts and results are in
+  `tools/wakeword/`.
 - Answers its name out loud: "Yes?", "Mm-hm?" or "I'm listening.", in its own voice, the moment it
   hears "Orbit" (recorded once per voice and kept on the phone; Settings → Talk can switch it off).
 - Quicker to react to its name: the eyes perk up the moment you start talking to it (while it can
   see you), then give a quick, bright "yes?" look once it's sure it heard its name. No more "thinking"
   spinner while it connects: it's already listening.
+- The quick "Yes?" now plays through the conversation's own speaker: on some phones the switch to
+  call mode muted it.
 - Settings show whether the quick replies are recorded (or why not); a failed try waits 10 minutes.
 - Speaks English unless you ask for another language (it sometimes switched on its own when it
   misheard).

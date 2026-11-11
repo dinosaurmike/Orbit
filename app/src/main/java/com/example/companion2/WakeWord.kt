@@ -38,9 +38,16 @@ fun wakePhrases(text: String) = text.split(",")
     .flatMap { SOUNDS_LIKE[it] ?: listOf(it) }
     .distinct()
 
-// Listens for the wake words ("orbit", "orby") entirely on the phone, using Vosk, a free
-// offline speech recognizer. It only listens for the wake words versus "anything else",
-// which keeps it light. No sound leaves the phone for this.
+// True if every wake word is one of Orbit's own names, which its fast ear knows
+fun onlyOrbitNames(text: String) = text.split(",")
+    .map { it.trim().lowercase() }
+    .filter { it.isNotEmpty() }
+    .let { words -> words.isNotEmpty() && words.all { it in OrbitEar.NAMES } }
+
+// Listens for the wake words entirely on the phone. No sound leaves the phone for this.
+// For Orbit's own names it uses its fast ear (OrbitEar: a small model trained just for "Orbit",
+// which fires the moment the name ends). For any other wake word it uses Vosk, a free offline
+// speech recognizer listening for the wake words versus "anything else".
 class WakeWord(private val context: Context, private val settings: Settings) {
     @Volatile var status = "Off"                 // shown on the settings screen
     @Volatile var onHeard: (() -> Unit)? = null  // called (on a background thread) when heard
@@ -55,6 +62,11 @@ class WakeWord(private val context: Context, private val settings: Settings) {
     private val worker = Executors.newSingleThreadExecutor()
     private val queued = AtomicInteger(0)
     @Volatile private var model: Model? = null
+    @Volatile private var ear: OrbitEar? = null
+    // Only touched on the worker thread: when the fast ear last fired or last thought "maybe"
+    private var earFiredAt = 0L
+    private var earMaybeAt = 0L
+    private var earStreak = 0  // how many 80 ms steps in a row have sounded sure
     @Volatile private var preparing = false
     // Only touched on the worker thread
     private var recognizer: Recognizer? = null
@@ -65,6 +77,19 @@ class WakeWord(private val context: Context, private val settings: Settings) {
 
     // Downloads the speech model (first time only) and loads it. Safe to call again.
     fun prepare() {
+        if (settings.fastWake && onlyOrbitNames(settings.wakePhrase)) {
+            if (ear == null) {
+                try {
+                    ear = OrbitEar(context)
+                } catch (e: Exception) {
+                    Log.e("Orbit", "Fast wake word failed to load; using the speech recognizer", e)
+                }
+            }
+            if (ear != null) {
+                status = "Ready (fast ear) · say \"${settings.wakePhrase.trim()}\""
+                return
+            }
+        }
         if (model != null) {
             status = "Ready · say \"${settings.wakePhrase.trim()}\""
             return
@@ -123,7 +148,17 @@ class WakeWord(private val context: Context, private val settings: Settings) {
 
     // Called with each 50 ms of microphone sound while no conversation is open
     fun listen(sound: ByteArray) {
-        val loaded = model ?: return
+        val fast = ear?.takeIf { settings.fastWake && onlyOrbitNames(settings.wakePhrase) }
+        if (fast != null) {
+            hear(fast, sound)
+            return
+        }
+        val loaded = model
+        if (loaded == null) {
+            // Switched from the fast ear to other wake words: get the speech recognizer ready
+            if (!preparing) prepare()
+            return
+        }
         lastSoundAt = System.currentTimeMillis()
         // If the phone falls behind, skip sound rather than pile it up
         if (queued.get() > 20) return
@@ -157,7 +192,54 @@ class WakeWord(private val context: Context, private val settings: Settings) {
             }
         }
     }
+
+    // The fast ear: scores the sound every 80 ms. Answers once, then ignores itself for a moment
+    // (so one "Orbit" can't wake it twice).
+    private fun hear(fast: OrbitEar, sound: ByteArray) {
+        val now0 = System.currentTimeMillis()
+        // After a gap (a conversation, sleep), start fresh rather than join old sound to new
+        val gap = now0 - lastSoundAt > 500
+        lastSoundAt = now0
+        if (queued.get() > 20) return
+        queued.incrementAndGet()
+        worker.execute {
+            try {
+                if (gap) {
+                    fast.reset()
+                    earStreak = 0
+                }
+                val score = fast.accept(sound) ?: return@execute
+                val now = System.currentTimeMillis()
+                if (now - earFiredAt < 1500) return@execute
+                if (score >= EAR_MAYBE) {
+                    lastHeard = "sounded %d%% like its name".format((score * 100).toInt())
+                    if (now - earMaybeAt > 1000) {
+                        earMaybeAt = now
+                        onMaybe?.invoke()
+                    }
+                }
+                // Sure twice in a row (160 ms): a single blip from a noise or a TV doesn't count.
+                // Costs 80 ms, halves false wakes.
+                earStreak = if (score >= EAR_SURE) earStreak + 1 else 0
+                if (earStreak >= 2) {
+                    earStreak = 0
+                    earFiredAt = now
+                    fast.reset()
+                    lastWakeAt = now
+                    onHeard?.invoke()
+                }
+            } catch (e: Exception) {
+                Log.e("Orbit", "Fast wake word listening failed", e)
+            } finally {
+                queued.decrementAndGet()
+            }
+        }
+    }
 }
+
+// How sure the fast ear must be (0 to 1): enough to drop the music, enough to answer
+private const val EAR_MAYBE = 0.15f
+private const val EAR_SURE = 0.5f
 
 // Passes data straight through, reporting how many bytes have gone by (for download progress)
 private class CountingStream(input: InputStream, private val onProgress: (Long) -> Unit) :

@@ -166,6 +166,10 @@ class GeminiLive(
         return if (progress < 1f) name to progress else null
     }
 
+    // Plays a sound in Orbit's voice straight away (its quick "Yes?"), through the same speaker
+    // the conversation uses
+    fun sayNow(pcm: ByteArray) = speaker.play(pcm)
+
     // "Shh": stop talking right now (the conversation stays open)
     fun hush() {
         speaker.stop()
