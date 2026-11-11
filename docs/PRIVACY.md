@@ -80,7 +80,8 @@ Neither sends anything anywhere.
 - **Sleep:** double-tap, or say "goodnight". Microphone off; it only checks (on the phone) for your face to wake up.
 - **Privacy mode:** say "privacy mode". Camera and microphone fully off until you double-tap.
 - Settings → Privacy → See what Orbit remembers: see, edit or wipe notes, moments and the conversation diary; switch memory or the diary off.
-- Settings → Conversation: switch off seeing, web search, greeting, wake word.
-- Settings → Computer: switch off screen looks. Orbit Desk: type `p` to pause, `q` to quit.
+- Settings → Privacy: switch off seeing. Settings → Orbit: the wake word, the greeting, and
+  (under Talking) web search.
+- Settings → Device → Looking at your computer screen: switch off screen looks or agent news. Orbit Desk: type `p` to pause, `q` to quit.
 - Orbit opts out of Android's cloud backup, so its memory and your key aren't copied to your
   Google account. Uninstalling the app deletes everything it stored.

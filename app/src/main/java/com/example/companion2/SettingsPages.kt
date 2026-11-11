@@ -141,8 +141,8 @@ fun OrbitPage(
 
     SwitchSetting(
         "Talk by saying \"Orby\"",
-        "Listens for its name, on the phone only (a free 40 MB speech model downloads the first " +
-            "time). Or just tap the eyes.",
+        "Listens for its name, on the phone only, with a small model trained just for its name " +
+            "(other wake words download a free 40 MB speech model the first time). Or just tap the eyes.",
         settings.wakeWordOn
     ) {
         settings.wakeWordOn = it

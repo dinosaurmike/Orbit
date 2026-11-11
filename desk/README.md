@@ -29,8 +29,8 @@ you asked about, or the few words of news it speaks).
 4. **Windows Firewall** may ask whether Python can use the network: allow it on
    **Private networks** (your home Wi-Fi). Without this the phone can't reach it.
 5. The window shows the computer's name, its address and a **6-digit pairing code**.
-6. **On Orbit:** long-press the eyes → **Computer** tab → switch on **Orbit Desk on my
-   computer** → **Find my computer** → tap your computer → type the pairing code → **Test**.
+6. **On Orbit:** long-press the eyes → **Device** → **Looking at your computer screen** →
+   switch on **Orbit Desk on my computer** → **Find my computer** → tap your computer → type the pairing code → **Test**.
    You should see **✓ Connected to (your computer)**.
 7. Ask Orbit: *"What do you think of what's on my screen?"* Or, on the computer, try the agent
    news: `python orbit_desk.py notify done "Hello from my computer"` (Windows: `py` instead of
@@ -159,7 +159,7 @@ curl -X POST http://127.0.0.1:47800/agent/notify -H "X-Orbit-Agent: 1" \
   you were away: Codex is done. Cursor needs you.").
 - **In a conversation, or asleep?** It waits until it's done or awake.
 - **Focus session?** Finished and FYI news is shown quietly; "needs you" and problems still speak.
-- **Saying it out loud** can be switched off on Orbit (Computer tab), leaving just the look and
+- **Saying it out loud** can be switched off on Orbit (Settings → Device → Looking at your computer screen), leaving just the look and
   the sound.
 
 ## While it runs

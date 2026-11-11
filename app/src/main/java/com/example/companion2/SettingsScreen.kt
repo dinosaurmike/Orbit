@@ -983,7 +983,7 @@ fun ScreenSpotSettings(settings: Settings, neck: Neck, gemini: GeminiLive, onFin
             "(with its own camera; nothing to install on the computer). Tap Find my screen, or say " +
             "\"Orby, find my screen\": it looks around by itself (about a minute), turns to the " +
             "screen, then asks you to fine-tune it by voice (\"a bit left\", \"up\", \"perfect\"). " +
-            "It looks with the back camera (Computer settings), so it can face you with the screen " +
+            "It looks with the back camera (Device → Looking at your computer screen), so it can face you with the screen " +
             "behind or beside it. If your screen sits high, let it bow further forward (Look down, " +
             "above): tilting its face down points the back camera up."
     )

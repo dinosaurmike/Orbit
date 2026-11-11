@@ -79,7 +79,8 @@ is sagging: check the capacitor, the shared ground, and that the supply gives en
 ## Connecting the phone
 
 1. Neck powered, ESP32 running (no pairing in Android's Bluetooth menu; the app does it).
-2. In Orbit, long-press → **Neck** tab → switch **Neck** on → allow *Nearby devices*.
+2. In Orbit, long-press the eyes → **Device** → **Add a neck (optional)** → switch **Neck** on →
+   allow *Nearby devices*.
 3. The status should go *Looking for the neck… → Connecting… → Neck connected*.
 4. Tap **Hold straight ahead**, then move the two *Straight ahead* sliders until the phone
    faces forward and level. Tap again to let go.

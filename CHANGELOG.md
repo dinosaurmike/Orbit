@@ -37,12 +37,12 @@
   (`orbit_notify`, `orbit_status`, `orbit_express`), a hook for agents that have hooks, a command
   (`orbit_desk.py notify done "…"`) and a local web endpoint. Agents can only reach it from the
   computer itself, and only send short news and reactions. Orbit says the news with Gemini's voice
-  alone (no conversation, no tools). Settings → Computer.
+  alone (no conversation, no tools). Settings → Device → Looking at your computer screen.
 - Looks at your computer screen with the back camera: Orbit faces you, so your screen is usually
   behind or beside it. The front camera stays on you (faces, gestures, "what am I holding?").
   "Find my screen" searches with the back camera too: face bowed down (so the back camera looks
   up, where screens usually are), then level, sweeping side to side; "a bit left" now steers the
-  back of its head. Switch it off in Settings → Computer if your screen is in front of Orbit.
+  back of its head. Switch it off in Settings → Device → Looking at your computer screen if your screen is in front of Orbit.
 - Orbit Desk is its own setting now (it no longer needs screen looks switched on), with a choice
   of using it for screenshots, agent news, or both.
 - Smaller download: the release APK only includes phone processors (ARM), not PC-emulator copies.
@@ -53,10 +53,10 @@
   finish the name instead of waiting for the speech recognizer (about 40 ms after the name ends, in
   tests). Caught 79% of names from 100 voices it never trained on, with one false wake in 5.3 hours
   of other people's conversations. Runs on the phone; other wake words still use the speech
-  recognizer. Settings → Talk → "Fast ear for its name". Training scripts and results are in
+  recognizer. Settings → Orbit → "Fast ear for its name". Training scripts and results are in
   `tools/wakeword/`.
 - Answers its name out loud: "Yes?", "Mm-hm?" or "I'm listening.", in its own voice, the moment it
-  hears "Orbit" (recorded once per voice and kept on the phone; Settings → Talk can switch it off).
+  hears "Orbit" (recorded once per voice and kept on the phone; Settings → Orbit can switch it off).
 - Quicker to react to its name: the eyes perk up the moment you start talking to it (while it can
   see you), then give a quick, bright "yes?" look once it's sure it heard its name. No more "thinking"
   spinner while it connects: it's already listening.

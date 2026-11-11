@@ -40,7 +40,7 @@ axis, heat, cables): [neck/ENCLOSURE.md](../neck/ENCLOSURE.md).
 ## Optional: Orbit Desk
 
 For crisp screen text, or to see your screen without a neck, run
-[Orbit Desk](../desk/README.md) on your computer and pair it on the **Computer** tab.
+[Orbit Desk](../desk/README.md) on your computer and pair it in **Settings → Device → Looking at your computer screen**.
 
 ## Make it yours
 

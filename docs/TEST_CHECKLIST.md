@@ -79,8 +79,8 @@ or say "Orby").
 
 ## Orbit Desk (optional)
 - [ ] On the PC: run_orbit_desk.bat → shows name, address, pairing code
-- [ ] Computer tab → Find my computer → pick it → code → Test → "✓ Connected to …"
-- [ ] Computer tab → "Optional: sharper text with Orbit Desk" on → ask about your screen → eyes
+- [ ] Device → Looking at your computer screen → Find my computer → pick it → code → Test → "✓ Connected to …"
+- [ ] Device → Looking at your computer screen → "Orbit Desk on my computer" on → ask about your screen → eyes
       glance toward the computer, it describes the screen; the PC window lists the look
 - [ ] Type p + Enter on the PC, ask again → it says sharing is paused
 - [ ] Eyes tab → Copy my look → change something → Paste a look → it goes back

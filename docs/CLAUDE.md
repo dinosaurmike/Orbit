@@ -118,7 +118,7 @@ Code is in `app/src/main/java/com/example/companion2/`:
 
 **Orbit Desk (optional extra)** (built 2026-10-28; Python tested here with a fake capture; app side untested)
 * `desk/orbit_desk.py` (Python 3, `mss` + `pillow`): HTTP on 47800 (`/hello`, `/check`, `/screen` → JPEG ≤1600 px q70), pairing code in header `X-Orbit-Code` (6 digits, `~/.orbit_desk.json`, `--new-code`), 401 wrong / 423 paused / 429 after 5 wrong in 60 s (1 min lockout), ≥ 2 s between pictures, prints each look, `p` pause / `q` quit, `--monitor N`. UDP 47801 discovery: "ORBIT-DESK?" → "ORBIT-DESK <port> <name>".
-* App: Computer tab (switch, Find my computer, address, code, Test, glance left/right, privacy note). Tool `look_at_screen` (blocking, only when deskOn + address): `looking_screen_left/right` expression 3 s (eyes + neck turn toward the computer), DeskLink.screenshot() on a thread → `realtimeInput.video`, tool answer (or the reason it failed). Instructions mention it with a privacy caution.
+* App: Computer tab (switch, Find my computer, address, code, Test, glance left/right, privacy note). Tool `look_at_screen` (blocking, only when deskOn + address): `looking_screen_left/right` expression 3 s (eyes + neck turn toward the computer), DeskLink.screenshot() on a thread → `showPhoto` (`clientContent`, in order, before the tool answer), tool answer (or the reason it failed). Instructions mention it with a privacy caution.
 * Eye looks shareable: Eyes tab Copy my look / Paste a look (`ORBIT-EYES:{json}`, values clamped to slider ranges).
 * Manifest: `allowBackup="false"` (keeps the key and memory out of Google cloud backup).
 
