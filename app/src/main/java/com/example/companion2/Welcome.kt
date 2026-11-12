@@ -1,5 +1,6 @@
 package com.example.companion2
 
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -79,7 +80,7 @@ fun Welcome(settings: Settings, gemini: GeminiLive, onDone: () -> Unit) {
             next = "Say hello"
         )
     )
-    var step by remember { mutableStateOf(0) }
+    var step by remember { mutableIntStateOf(0) }
 
     MaterialTheme(colorScheme = SettingsColors) {
         Box(

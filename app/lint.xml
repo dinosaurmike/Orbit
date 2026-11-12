@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lint runs on every push and fails the build on any error or warning (see app/build.gradle.kts).
+     These few checks are switched off on purpose: -->
+<lint>
+    <!-- "A newer version of X is available": true most weeks, so the build would fail at random.
+         Dependabot opens pull requests for updates instead. -->
+    <issue id="GradleDependency" severity="ignore" />
+    <issue id="NewerVersionAvailable" severity="ignore" />
+    <issue id="AndroidGradlePluginVersion" severity="ignore" />
+    <!-- "Put this dependency in the version catalog": a style choice, not a problem. -->
+    <issue id="UseTomlInstead" severity="ignore" />
+    <!-- The release APK only includes phone processors (ARM): it halves the download. -->
+    <issue id="ChromeOsAbiSupport" severity="ignore" />
+</lint>

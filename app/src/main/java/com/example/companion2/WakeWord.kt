@@ -63,6 +63,11 @@ class WakeWord(private val context: Context, private val settings: Settings) {
     private val queued = AtomicInteger(0)
     @Volatile private var model: Model? = null
     @Volatile private var ear: OrbitEar? = null
+    // Learning your voice (Settings → Orbit → Teach it your voice): its own ear, fresh each time
+    @Volatile var training: VoiceTraining? = null
+        private set
+    @Volatile private var trainingEar: OrbitEar? = null
+    val myVoiceFolder get() = File(context.filesDir, "my_voice")
     // Listening with its own fast model right now (not the speech recognizer)
     val fastEarActive get() = ear != null && settings.fastWake && onlyOrbitNames(settings.wakePhrase)
     // Only touched on the worker thread: when the fast ear last fired or last thought "maybe"
@@ -150,6 +155,22 @@ class WakeWord(private val context: Context, private val settings: Settings) {
 
     // Called with each 50 ms of microphone sound while no conversation is open
     fun listen(sound: ByteArray) {
+        // Learning your voice: the sound goes to the training (and it doesn't wake meanwhile)
+        training?.let { t ->
+            if (queued.get() > 20) return
+            queued.incrementAndGet()
+            worker.execute {
+                try {
+                    val ear = trainingEar ?: return@execute
+                    if (t.feed(sound, ear.accept(sound))) finishTraining(t)
+                } catch (e: Exception) {
+                    Log.e("Orbit", "Voice training failed", e)
+                } finally {
+                    queued.decrementAndGet()
+                }
+            }
+            return
+        }
         val fast = ear?.takeIf { settings.fastWake && onlyOrbitNames(settings.wakePhrase) }
         if (fast != null) {
             hear(fast, sound)
@@ -195,6 +216,34 @@ class WakeWord(private val context: Context, private val settings: Settings) {
         }
     }
 
+    // Starts learning your voice: say its name 10 times. Returns the training to watch.
+    fun startTraining(): VoiceTraining? {
+        val fresh = try {
+            OrbitEar(context)
+        } catch (e: Exception) {
+            Log.e("Orbit", "Couldn't start voice training", e)
+            return null
+        }
+        stopTraining()
+        myVoiceFolder.deleteRecursively()  // new takes replace the old ones
+        trainingEar = fresh
+        return VoiceTraining(myVoiceFolder).also { training = it }
+    }
+
+    fun stopTraining() {
+        training = null
+        val old = trainingEar
+        trainingEar = null
+        worker.execute { old?.close() }
+    }
+
+    // All 10 takes are in: use the new setting, and go back to listening as usual
+    private fun finishTraining(t: VoiceTraining) {
+        settings.earThreshold = t.threshold
+        stopTraining()
+        ear?.reset()
+    }
+
     // The fast ear: scores the sound every 80 ms. Answers once, then ignores itself for a moment
     // (so one "Orbit" can't wake it twice).
     private fun hear(fast: OrbitEar, sound: ByteArray) {
@@ -222,7 +271,9 @@ class WakeWord(private val context: Context, private val settings: Settings) {
                 }
                 // Sure twice in a row (160 ms): a single blip from a noise or a TV doesn't count.
                 // Costs 80 ms, halves false wakes.
-                earStreak = if (score >= EAR_SURE) earStreak + 1 else 0
+                // How sure it must be: standard, or lower if it learned your voice
+                val sure = settings.earThreshold.coerceIn(LOWEST_EAR_THRESHOLD, STANDARD_EAR_THRESHOLD)
+                earStreak = if (score >= sure) earStreak + 1 else 0
                 if (earStreak >= 2) {
                     earStreak = 0
                     earFiredAt = now
@@ -241,7 +292,6 @@ class WakeWord(private val context: Context, private val settings: Settings) {
 
 // How sure the fast ear must be (0 to 1): enough to drop the music, enough to answer
 private const val EAR_MAYBE = 0.15f
-private const val EAR_SURE = 0.5f
 
 // Passes data straight through, reporting how many bytes have gone by (for download progress)
 private class CountingStream(input: InputStream, private val onProgress: (Long) -> Unit) :

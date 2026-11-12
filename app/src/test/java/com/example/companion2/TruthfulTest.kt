@@ -15,6 +15,16 @@ class TruthfulTest {
     }
 
     @Test
+    fun itKeepsItsRulesToItself() {
+        // It once announced "I only speak English unless prompted" when someone walked in
+        assertTrue(LANGUAGE_RULE.contains("never mention it"))
+        assertTrue(LANGUAGE_RULE.contains("don't comment on that"))
+        assertTrue(QUIET_RULES.contains("Only answer speech that's clearly said to you"))
+        assertTrue(QUIET_RULES.contains("never talk about them"))
+        assertTrue(GREETING.contains("stay quiet until they actually speak to you"))
+    }
+
+    @Test
     fun everyPhotoComesWithTheRules() {
         for (phrase in listOf("only what you can clearly see", "Never guess or invent", "never fill in",
             "say exactly that", "ask for help")) {

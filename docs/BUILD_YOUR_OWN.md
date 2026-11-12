@@ -17,7 +17,7 @@ battery isn't swelling (lay the phone flat; it shouldn't rock).
 
 So it physically turns to look at you, nods, droops, looks down at your desk, and **turns to
 your computer screen** when you ask "what do you think of this?" (show it where the screen is:
-Settings → Neck → Your screen). Nothing to install on the computer.
+Settings → Device → Neck → Your screen). Nothing to install on the computer.
 
 | Part | Notes |
 |---|---|
@@ -44,7 +44,7 @@ For crisp screen text, or to see your screen without a neck, run
 
 ## Make it yours
 
-- **Name and personality:** Settings → Conversation and Memory.
+- **Name, voice and personality:** Settings → Orbit. **Memory:** Settings → Privacy.
 - **The eyes:** Settings → Eyes. Share your look with **Copy my look**, and try others' with
   **Paste a look**.
 - **Habits and sounds:** Settings → Orbit → Sounds and habits. Want new ones? See [CONTRIBUTING.md](../CONTRIBUTING.md).

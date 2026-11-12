@@ -1,5 +1,6 @@
 package com.example.companion2
 
+import androidx.core.net.toUri
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
@@ -58,7 +59,7 @@ class SpotifyConnect(private val settings: Settings) {
             MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray()),
             Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP
         )
-        return Uri.parse("https://accounts.spotify.com/authorize").buildUpon()
+        return "https://accounts.spotify.com/authorize".toUri().buildUpon()
             .appendQueryParameter("client_id", id)
             .appendQueryParameter("response_type", "code")
             .appendQueryParameter("redirect_uri", SPOTIFY_REDIRECT)

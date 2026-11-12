@@ -1,5 +1,9 @@
 package com.example.companion2
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -24,14 +28,19 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -159,6 +168,13 @@ fun OrbitPage(
             settings.fastWake = it
             wake.prepare()
         }
+        if (settings.fastWake) LearnMyVoice(settings, wake, name)
+        SwitchSetting(
+            "Connect early",
+            "When you start talking to $name while facing it, it connects to Google straight away, so " +
+                "if you're saying its name, it's ready sooner. Nothing you say is sent unless you say its name.",
+            settings.connectEarly
+        ) { settings.connectEarly = it }
         SwitchSetting(
             "Answer \"Yes?\" when called",
             "Says a quick \"Yes?\" or \"Mm-hm?\" in its own voice the moment it hears its name. Recorded " +
@@ -672,6 +688,46 @@ fun PrivacyPage(settings: Settings, people: People, calendar: DayCalendar) {
         }) { Text(if (confirmWipe) "Tap again to forget everything" else "Forget everything") }
     }
 
+    MoreOptions("Recent conversations, in detail") {
+        val context = LocalContext.current
+        var shown by remember { mutableStateOf(ConvoLog.recent()) }
+        var copiedAt by remember { mutableLongStateOf(0L) }
+        SwitchSetting(
+            "Keep a detailed log",
+            "The last ${ConvoLog.KEEP} conversations: why each one started, what it heard and said, and " +
+                "what it did (tools, photos). Kept on this phone only. If $name does something odd, " +
+                "this shows why.",
+            settings.convoLogOn
+        ) {
+            settings.convoLogOn = it
+            ConvoLog.enabled = it
+            if (!it) {
+                ConvoLog.clear()
+                shown = emptyList()
+            }
+        }
+        if (settings.convoLogOn && shown.isEmpty()) {
+            Text("Nothing yet. Talk to $name and it shows up here.", color = Muted, fontSize = 14.sp)
+        }
+        shown.forEach { convo ->
+            Text(
+                ConvoLog.asText(convo), color = Ink, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            TextButton(onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("Orbit conversation", ConvoLog.asText(convo)))
+                copiedAt = convo.startedAt
+            }) { Text(if (copiedAt == convo.startedAt) "Copied" else "Copy this conversation") }
+        }
+        if (shown.isNotEmpty()) {
+            TextButton(onClick = {
+                ConvoLog.clear()
+                shown = emptyList()
+            }) { Text("Clear the log") }
+        }
+    }
+
     MoreOptions("Fine-tune") {
         SwitchSetting(
             "Let it see when I ask",
@@ -768,6 +824,23 @@ fun DevicePage(
 ) {
     // A quick health check: everything important at a glance, refreshed every second
     StatusChecks(settings, gemini, heat, neck, player)
+
+    // A newer Orbit is out (it checks GitHub once a day)
+    Updates(settings, BuildConfig.VERSION_NAME).available()?.let { newer ->
+        val links = LocalUriHandler.current
+        InfoCard(
+            "Orbit $newer is out",
+            "You have ${BuildConfig.VERSION_NAME}. On the release page, download the .apk under Assets " +
+                "and open it: it installs over this one and keeps everything (settings, memories, your key)."
+        ) {
+            OutlinedButton(onClick = { links.openUri(RELEASES_PAGE) }) { Text("See what's new") }
+        }
+    }
+    SwitchSetting(
+        "Tell me about updates",
+        "Once a day it asks GitHub for the latest version number. Nothing about you is sent.",
+        settings.updateCheck
+    ) { settings.updateCheck = it }
 
     SettingTitle(
         "Gemini key",
@@ -915,3 +988,75 @@ private fun statusChecks(
     }
     return list
 }
+
+// "Teach it your voice": say its name 10 times; it learns how sure its ear should be for you
+@Composable
+fun LearnMyVoice(settings: Settings, wake: WakeWord, name: String) {
+    var training by remember { mutableStateOf(wake.training) }
+    var takes by remember { mutableIntStateOf(0) }
+    var ready by remember { mutableStateOf(false) }
+    var last by remember { mutableFloatStateOf(0f) }
+    var result by remember { mutableStateOf("") }
+    var hasRecordings by remember { mutableStateOf(wake.myVoiceFolder.list()?.isNotEmpty() == true) }
+    // Follow the training while it runs (it happens on the wake word's own thread)
+    LaunchedEffect(training) {
+        val t = training ?: return@LaunchedEffect
+        while (true) {
+            takes = t.takes
+            ready = t.ready
+            last = t.lastScore
+            if (t.done) {
+                result = t.result
+                hasRecordings = true
+                training = null
+                break
+            }
+            delay(200)
+        }
+    }
+    val custom = settings.earThreshold < STANDARD_EAR_THRESHOLD
+    SettingTitle(
+        "Teach it your voice",
+        "Say \"${settings.wakePhrase.split(",").first().trim().replaceFirstChar { it.uppercase() }}\" " +
+            "$TRAINING_TAKES times, pausing between each, and $name learns how your voice sounds to its " +
+            "ear. The recordings stay on this phone." +
+            if (custom) " Now set for your voice." else ""
+    )
+    val t = training
+    if (t != null) {
+        Text(
+            when {
+                !ready -> "Getting ready…"
+                takes == 0 -> "Say it now"
+                else -> "$takes of $TRAINING_TAKES  ·  last one: ${(last * 100).toInt()}% sure"
+            },
+            color = Accent
+        )
+        OutlinedButton(onClick = {
+            wake.stopTraining()
+            training = null
+        }) { Text("Stop") }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = {
+                result = ""
+                training = wake.startTraining()
+                if (training == null) result = "Couldn't start: the fast ear isn't ready yet."
+            }) { Text(if (custom) "Teach it again" else "Start") }
+            if (custom) {
+                OutlinedButton(onClick = {
+                    settings.earThreshold = STANDARD_EAR_THRESHOLD
+                    result = "Back to the standard setting."
+                }) { Text("Reset") }
+            }
+        }
+        if (result.isNotEmpty()) Text(result, color = Accent, fontSize = 14.sp)
+        if (hasRecordings) {
+            TextButton(onClick = {
+                wake.myVoiceFolder.deleteRecursively()
+                hasRecordings = false
+            }) { Text("Delete my recordings") }
+        }
+    }
+}
+

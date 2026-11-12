@@ -13,7 +13,7 @@ the reference ESP32 pan/tilt neck (`neck/orbit_neck/`), other servos, an animatr
 | Name | Anything; the reference uses `Orbit-Neck` (in the scan response) |
 
 The phone scans for the service UUID, remembers the first body it finds, and reconnects to it
-automatically. No pairing in Android's Bluetooth settings is needed. Settings → Neck →
+automatically. No pairing in Android's Bluetooth settings is needed. Settings → Device → Neck →
 **Find the neck again** forgets it and scans again.
 
 ## Commands

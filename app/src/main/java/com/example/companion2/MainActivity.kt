@@ -1,5 +1,7 @@
 package com.example.companion2
 
+import androidx.core.content.edit
+import android.annotation.SuppressLint
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -42,6 +44,7 @@ import java.io.ByteArrayOutputStream
 import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.random.Random
+import kotlin.concurrent.thread
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlinx.coroutines.delay
@@ -114,6 +117,7 @@ class MainActivity : ComponentActivity() {
     @Volatile private var backUsedAt = 0L
     // News from coding agents on the computer (through Orbit Desk)
     private lateinit var agents: AgentBridge
+    private val updates by lazy { Updates(settings, BuildConfig.VERSION_NAME) }
     private var lastAgentSpeech = 0L
 
     // Dozing: awake, but nobody has been around for a while and no conversation is open
@@ -149,6 +153,9 @@ class MainActivity : ComponentActivity() {
         hideSystemBars()
 
         settings = Settings(this)
+        // The detailed log of recent conversations (Settings → Privacy), kept on the phone
+        ConvoLog.init(filesDir)
+        ConvoLog.enabled = settings.convoLogOn
         comeBackAfterCrashes()
         // Test builds may fall back to your own key from local.properties; published builds never do
         gemini = GeminiLive(
@@ -247,6 +254,8 @@ class MainActivity : ComponentActivity() {
         // The start of its name, maybe: drop the music right away so it can hear the rest
         // (it comes back after 3 seconds if that wasn't its name)
         wake.onMaybe = {
+            // Sounds like its name: connect early (not facing it, the voice onset didn't count)
+            if (!asleep && !gemini.active && gemini.hasKey()) gemini.prewarm()
             runOnUiThread {
                 if (player.playing && !gemini.active) {
                     maybeCalledAt = System.currentTimeMillis()
@@ -330,6 +339,10 @@ class MainActivity : ComponentActivity() {
                     replies.prepareReplies(gemini.key(), settings.voice)
                 }
                 maybeDaydream()
+                // Is there a newer Orbit? (once a day, on its own thread)
+                if (settings.updateCheck && System.currentTimeMillis() - settings.lastUpdateCheck > 24 * 3_600_000L) {
+                    thread(name = "update-check") { updates.checkIfDue() }
+                }
                 delay(30_000)
             }
         }
@@ -594,7 +607,7 @@ class MainActivity : ComponentActivity() {
             val crashes = getSharedPreferences("orbit_crashes", MODE_PRIVATE)
             val now = System.currentTimeMillis()
             val previous = crashes.getLong("last", 0L)
-            crashes.edit().putLong("last", now).commit()
+            saveCrashTime(crashes, now)
             if (settings.comeBack && now - previous > 60_000) {
                 try {
                     startActivity(
@@ -1419,6 +1432,12 @@ class MainActivity : ComponentActivity() {
         null
     }
 
+    // commit, not apply: the app is about to close after a crash, so it must be written right now
+    @SuppressLint("ApplySharedPref")
+    private fun saveCrashTime(prefs: android.content.SharedPreferences, now: Long) {
+        prefs.edit(commit = true) { putLong("last", now) }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         agents.stop()
@@ -1480,6 +1499,9 @@ class MainActivity : ComponentActivity() {
         }
         val wasQuiet = quietSince != 0L && now - quietSince > 500
         quietSince = 0L
+        // You've started talking while facing it: probably to it, so connect to Google now. If it's
+        // "Orby, …", the conversation is ready sooner; if not, the connection closes by itself.
+        if (wasQuiet && tracker.seesFace() && !asleep && !showSettings && !gemini.active && gemini.hasKey()) gemini.prewarm()
         if (!wasQuiet || now - lastPerkAt < 2500 || !tracker.seesFace()) return
         lastPerkAt = now
         runOnUiThread {

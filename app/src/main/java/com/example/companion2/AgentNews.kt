@@ -81,8 +81,9 @@ class AgentBridge(
 ) {
     @Volatile private var running = false
 
-    private fun wanted() = settings.deskOn && settings.agentsOn &&
-        settings.deskAddress.isNotBlank() && settings.deskCode.isNotBlank()
+    // Paired (a secret), or paired the old way (a code), which then shows "tap Pair again"
+    private fun wanted() = settings.deskOn && settings.agentsOn && settings.deskAddress.isNotBlank() &&
+        (settings.deskSecret.isNotBlank() || settings.deskCode.isNotBlank())
 
     fun start() {
         if (running) return

@@ -1,5 +1,5 @@
 @echo off
-REM Double-click to start Orbit Desk. The first time, it installs its two small add-ons.
+REM Double-click to start Orbit Desk. The first time, it installs its small add-ons (requirements.txt).
 cd /d "%~dp0"
 set PY=py
 where py >nul 2>nul || set PY=python

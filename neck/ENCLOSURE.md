@@ -23,7 +23,7 @@ bezels disappear.
 |---|---|---|---|
 | **A. Matte black bezel mask** (printed or cut frame over the phone's edges, open over the screen) | Good. Hides the phone shape | Works normally | Clear |
 | **B. Smoked acrylic** (2–3 mm, grey/black tint, about 30–50 % light through) | Best: the "black glass" look | **Won't work through 2–3 mm acrylic** | Needs a hole or clear window (tint and reflections blur face tracking) |
-| **C. Thin smoked film** (0.2–0.5 mm tinted PET or screen-protector film on the glass) | Very good | Usually works; turn on Settings → Display → Touch sensitivity | Cut a small hole for the lens |
+| **C. Thin smoked film** (0.2–0.5 mm tinted PET or screen-protector film on the glass) | Very good | Usually works; turn on the phone's own Settings → Display → Touch sensitivity | Cut a small hole for the lens |
 
 Suggestion: **C**, or **B** with a clear 6–8 mm hole for the camera. With B, use the wake
 word and voice commands ("goodnight", "that's all"), and remove the front to reach settings.

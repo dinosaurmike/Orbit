@@ -55,8 +55,9 @@ under Privacy → See what Orbit remembers.
 ## On your own network
 
 - **Orbit Desk** (optional) sends a screen picture from your computer to the phone over your
-  home network, only to a phone with the pairing code, only when asked. The computer lists each
-  look and can pause. It's not encrypted on the home network; don't use it on public networks.
+  home network, only to a phone paired with it (once, with its 6-digit code), only when asked. The
+  computer lists each look and can pause. After pairing, pictures and agent news are encrypted
+  so only that phone can read them. Pair on your own home network; don't use it on public networks.
 - **The neck** (optional) receives head angles over Bluetooth. Nothing else.
 
 ## Music
@@ -69,6 +70,25 @@ To control your music apps, Orbit needs Android's **Notification access** (that'
 calls permission to see and control other apps' music). Orbit only uses it for music and never
 reads your notifications. **Remember what I play** keeps a list of songs and artists on the phone
 (Settings → Music → Forget what I've played). "Play…" searches are done by your music app.
+## On the phone, for you
+
+- **Recent conversations, in detail** (Settings → Privacy, on unless you switch it off): the last
+  10 conversations: why each started, what it heard and said, which tools it used, photos it
+  looked at. On the phone only, so you can see why it did something. Clear it any time; switching
+  it off deletes it.
+- **Teach it your voice** (Settings → Orbit, only if you use it): the 10 recordings of you saying
+  its name stay on the phone; "Delete my recordings" removes them.
+- **Your Gemini key and the Orbit Desk pairing secret** are sealed with Android's Keystore before
+  they're saved, so a copy of Orbit's settings is useless without your phone.
+
+## Small things it sends
+
+- **Connect early** (Settings → Orbit): when you start talking while facing it, it opens the
+  connection to Google straight away. Nothing you say is sent unless you then say its name; if
+  you don't, the connection closes after 4 seconds.
+- **Update check** (Settings → Device): once a day it asks GitHub for the latest version number.
+  Nothing about you is sent.
+
 ## Appliance mode (off unless you switch it on)
 
 "Start when the phone turns on" needs Android's **Display over other apps** permission; Orbit

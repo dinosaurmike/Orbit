@@ -20,7 +20,7 @@ mode off, with **Hints at the bottom** on.
 
 1. **The eyes, watching you** (sit in front of it; plain dark background behind)
 2. **Happy arches** (say "make a happy face")
-3. **Listening, with captions on** (Settings → Conversation → Captions)
+3. **Listening, with captions on** (Settings → Orbit → Talking → Captions)
 4. **A timer running**: green screen edge + countdown ring ("set a 3 minute timer")
 5. **Asleep** with the floating z's (double-tap)
 6. **Settings**: the Eyes page with the live preview

@@ -75,6 +75,13 @@ android {
         compose = true
         buildConfig = true
     }
+    // Lint fails the build on any error or warning, so problems get fixed when they appear.
+    // A few checks are switched off on purpose: see lint.xml for which and why.
+    lint {
+        lintConfig = file("lint.xml")
+        abortOnError = true
+        warningsAsErrors = true
+    }
     packaging {
         jniLibs {
             // MediaPipe's library comes already stripped, so don't try (and don't warn about it)
@@ -109,6 +116,7 @@ dependencies {
     implementation("com.google.mediapipe:tasks-vision:0.10.26")  // 0.10.26+ supports 16 KB page sizes (needed for Google Play)
 
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303")  // Android's own org.json is only a stub in unit tests
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

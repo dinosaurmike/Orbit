@@ -99,6 +99,14 @@ the reference.
 The protocol is in [desk/README.md](desk/README.md): a few HTTP endpoints and a UDP reply.
 A tray app, a Mac menu-bar app, or a Linux daemon are all welcome.
 
+## Releasing a new version (maintainers)
+
+1. Make sure `CHANGELOG.md` has a `## … (unreleased)` section describing the changes.
+2. On GitHub: **Actions → Release → Run workflow**, type the new version (e.g. `0.1.2`), **Run**.
+3. It raises `versionCode`/`versionName`, dates the changelog section, builds the APK signed with
+   the Orbit key (checking it's the same key as v0.1.0), then commits, tags and publishes the
+   release with the APK attached. If anything fails, nothing is committed.
+
 ## Pull requests
 
 - One idea per pull request, with a short note on what it does and how you tested it (which phone).

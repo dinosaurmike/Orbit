@@ -188,6 +188,10 @@ Every push to GitHub runs the unit tests, builds the app, runs Android Lint and 
 history for leaked keys ([the workflow](.github/workflows/android.yml)); that's the **Build and
 test** badge at the top.
 
+Changing what Orbit is told? The [behaviour bench](tools/behavior/README.md) runs its real
+instructions against Gemini several times per scenario and reports pass rates (nightly too, once
+a `GEMINI_API_KEY` secret is added).
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for a tour of the code.
 
 ## Built with

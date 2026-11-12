@@ -1,5 +1,8 @@
 package com.example.companion2
 
+import androidx.core.graphics.get
+import androidx.core.graphics.scale
+import androidx.core.net.toUri
 import android.app.SearchManager
 import android.content.ComponentName
 import android.content.Context
@@ -89,7 +92,7 @@ class MusicControl(private val context: Context, private val settings: Settings)
     // Linking a music account: open the app (to sign in), or its Play Store page to get it
     fun openOrGet(pkg: String) {
         val intent = context.packageManager.getLaunchIntentForPackage(pkg)
-            ?: Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=$pkg"))
+            ?: Intent(Intent.ACTION_VIEW, "https://play.google.com/store/apps/details?id=$pkg".toUri())
         context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
@@ -468,12 +471,12 @@ class MusicControl(private val context: Context, private val settings: Settings)
 // The album art's main colour: the most common strong colour, at full brightness.
 // Null if the art is mostly grey (black-and-white covers keep the eyes' own colours).
 fun mainColor(art: Bitmap): Int? {
-    val small = Bitmap.createScaledBitmap(art, 16, 16, true)
+    val small = art.scale(16, 16)
     val bins = FloatArray(12)
     val sums = Array(12) { FloatArray(3) }
     val hsv = FloatArray(3)
     for (y in 0 until 16) for (x in 0 until 16) {
-        val p = small.getPixel(x, y)
+        val p = small[x, y]
         Color.colorToHSV(p, hsv)
         val weight = hsv[1] * hsv[2]  // colourful and bright counts most
         if (weight < 0.15f) continue

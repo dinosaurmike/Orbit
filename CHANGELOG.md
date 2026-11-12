@@ -2,6 +2,34 @@
 
 ## 0.1.1 (unreleased)
 
+- "What just happened?": Settings → Privacy → Recent conversations, in detail. The last 10
+  conversations: why each one started (its name, a tap, an arrival hello), what it heard and said,
+  which tools it used and with what, photos it looked at, and how it ended. Kept on the phone;
+  copy one to share when something odd happens.
+- Connect early: when you start talking while facing it, it connects to Google straight away, so
+  "Orby, …" gets an answer sooner. Nothing is sent unless you say its name; otherwise the
+  connection closes after 4 seconds (at most one early connection every 20 seconds).
+- Teach it your voice (Settings → Orbit): say its name 10 times and it learns how sure its ear
+  should be for you (never below a safe floor). Shows "before: 6 of 10, now: 10 of 10".
+- Update notices: once a day it checks GitHub for a newer version and shows a card in Settings →
+  Device.
+- Your Gemini key is now sealed with Android's Keystore (moved automatically).
+- One-step releases: GitHub Actions → Release → type the version. It raises the version number,
+  builds and signs the APK, and publishes the release with notes from this changelog.
+- Android Lint now fails the build on any warning; the existing warnings are fixed.
+- Orbit Desk is now paired once and encrypted. Before, the pairing code went over your Wi-Fi with
+  every request, and screen pictures and agent news went unencrypted. Now Orbit pairs once (tap
+  **Pair**; a key exchange checked with the code), then signs each request and the computer
+  encrypts what it sends back (AES-256-GCM). Copied requests and seen codes are useless to anyone
+  else on the network. Pair on a home network you trust: someone actively intercepting at the
+  moment you pair could still work out the code. Orbit Desk needs the `cryptography` add-on
+  (`requirements.txt`); the agent commands don't. Update both: an older phone or computer says
+  what to update.
+- Fixed: it once announced "I only speak English unless prompted" when someone walked in. The
+  arrival hello opens a conversation, a noise sounded like another language, and Gemini said its
+  rule out loud. Its rules are now silent (it never mentions them or explains them unless you ask
+  how it works), it only answers speech clearly said to it (not footsteps, a TV, or people talking
+  among themselves), and after an arrival hello it stays quiet until you speak to it.
 - Smooth wake-up: hearing its name no longer makes the eyes stutter. Two things used to happen in
   the same instant: the phone switched into call mode on the thread that draws the eyes (a slow
   system call that froze them for a moment), and a quick "wake" flash fought the switch to the
@@ -47,6 +75,11 @@
   of using it for screenshots, agent news, or both.
 - Smaller download: the release APK only includes phone processors (ARM), not PC-emulator copies.
 - Orbit Desk tests (23) run on Windows, macOS and Linux with Python 3.9 and 3.13.
+- Behaviour bench (`tools/behavior`): runs Orbit's real instructions against the real Gemini Live
+  API several times per scenario (a black desk photo, a drawn desk photo, tool words said out
+  loud, background talk after the arrival hello, mumbling) and reports pass rates, so instruction
+  fixes can be checked ("passed 15/15"). Runs nightly on GitHub once the `GEMINI_API_KEY` secret
+  is added; its own tests use a fake Gemini and need no key.
 - A fast ear for its own name: a small model trained just for "Orbit", "Orby" and "Or-bee"
   (openWakeWord's method, on about 10,000 synthetic voices plus sound-alikes like "orange", "Robbie"
   and "a bit"). It checks the last 1.3 seconds of sound every 80 ms, so it reacts the moment you

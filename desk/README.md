@@ -13,7 +13,8 @@ A tiny program for your computer that connects it to Orbit. It does two things:
    command, or a local web request. [Set it up below.](#coding-agents)
 
 Everything stays on your home network until Orbit sends something to Gemini (a screen picture
-you asked about, or the few words of news it speaks).
+you asked about, or the few words of news it speaks). Orbit pairs with the computer once, using a
+6-digit code; after that only your phone can ask, and what the computer sends it is encrypted.
 
 ## Set up (once)
 
@@ -24,14 +25,19 @@ you asked about, or the few words of news it speaks).
    - **Windows:** double-click `run_orbit_desk.bat`.
    - **Mac / Linux:** open a terminal in this folder and run
      `pip3 install -r requirements.txt` then `python3 orbit_desk.py`.
+     (`requirements.txt` installs three add-ons: `mss` and `pillow` take the screen picture,
+     `cryptography` does the pairing and encryption.)
      (Mac: the first time, allow **Screen Recording** for Terminal in System Settings →
      Privacy & Security.)
 4. **Windows Firewall** may ask whether Python can use the network: allow it on
    **Private networks** (your home Wi-Fi). Without this the phone can't reach it.
 5. The window shows the computer's name, its address and a **6-digit pairing code**.
 6. **On Orbit:** long-press the eyes → **Device** → **Looking at your computer screen** →
-   switch on **Orbit Desk on my computer** → **Find my computer** → tap your computer → type the pairing code → **Test**.
-   You should see **✓ Connected to (your computer)**.
+   switch on **Orbit Desk on my computer** → **Find my computer** → tap your computer → type the
+   pairing code → **Pair**. You should see **✓ Paired with (your computer)**, and the window
+   lists the new pairing. You only pair once: after that the code isn't needed or sent. Tap
+   **Test** to check: **✓ Connected to (your computer)**. Pair at home, on your own Wi-Fi
+   (see [Privacy and security](#privacy-and-security)).
 7. Ask Orbit: *"What do you think of what's on my screen?"* Or, on the computer, try the agent
    news: `python orbit_desk.py notify done "Hello from my computer"` (Windows: `py` instead of
    `python`).
@@ -173,7 +179,8 @@ curl -X POST http://127.0.0.1:47800/agent/notify -H "X-Orbit-Agent: 1" \
 Each look at your screen and each piece of agent news is listed in the window.
 
 Options: `--monitor 2` shares your second screen (`--monitor 0` = all screens together);
-`--new-code` makes a new pairing code (Orbit will need it); `--port 47900` uses another port.
+`--new-code` makes a new pairing code (phones already paired keep working); `--unpair` forgets
+every paired phone (each must pair again); `--port 47900` uses another port.
 
 To start it automatically on Windows: press Win + R, type `shell:startup`, and put a shortcut
 to `run_orbit_desk.bat` in the folder that opens.
@@ -185,15 +192,40 @@ to `run_orbit_desk.bat` in the folder that opens.
 - Check the firewall question above (Windows: Settings → Privacy & security → Windows Security →
   Firewall & network protection → Allow an app through firewall → Python → Private).
 - Type the address shown in the window (like `192.168.1.23:47800`) into Orbit by hand.
+- **"Orbit Desk was updated: tap Pair again"**: Orbit Desk and the Orbit app now pair once
+  instead of sending the code each time. Tap **Pair** (the old code is filled in for you).
+  **"update Orbit Desk on the computer"**: the computer has an older Orbit Desk; download the
+  new one. **"the phone's clock is … minutes behind"**: signed requests must be within 2 minutes
+  of the computer's clock; turn on automatic date and time on both.
 
 ## Privacy and security
 
-- Pictures go only to a phone that knows the pairing code. After 5 wrong codes in a minute it
-  refuses everyone for a minute.
-- The pairing code is kept in `.orbit_desk.json` in your home folder. Delete it, or run with
-  `--new-code`, to make a new one.
-- On your home network the picture travels unencrypted (like most home gadgets). Don't run it
-  on public or shared networks.
+- **Pairing, once.** Orbit and the computer pair with the 6-digit code: they swap keys (an
+  elliptic-curve key exchange) and each proves it knows the code. That gives them a shared
+  secret that never travels over the network. From then on the code isn't sent at all: Orbit
+  signs every request with the secret, and the computer encrypts what it sends back (screen
+  pictures, agent news, the connection check) so only that phone can read it.
+- **What this protects against.** Someone else on your network who listens in can't see your
+  screen pictures or news, and can't pick up the code (it's never sent). A request they copy is
+  useless: each carries the time and a one-off random number, and the computer refuses one it
+  has seen before or that's more than 2 minutes off. Other devices can't pair without the code,
+  and can't get anything from the computer to test guesses against (Orbit has to prove the code
+  first). After 5 wrong codes in a minute the computer refuses to pair with anyone for a minute.
+- **What it doesn't protect against.** This is a code-checked key exchange, not a full PAKE
+  (the kind of protocol designed to make even that impossible). Someone actively intercepting
+  the connection at the one moment you pair, pretending to be the computer, gets the phone's
+  proof and could try all million codes on their own computer in seconds, then pair in your
+  place. So **pair on a home network you trust**, and if pairing says the computer "couldn't
+  prove it knows the code", don't try again on that network. Also: the request itself (not the
+  answer) shows what Orbit reports for agents (whether someone is at the desk, asleep, …), and
+  anyone on the network can see that the phone and computer talk, and roughly how much (a screen
+  picture is bigger than news). Anyone who can cut your Wi-Fi can still stop it working.
+- **Each new pairing is listed** in the Orbit Desk window. Not you? Run with `--unpair` to
+  forget every paired phone, and `--new-code` for a new code.
+- The code and each paired phone's secret are kept in `.orbit_desk.json` in your home folder,
+  readable only by you (on Windows, your home folder is already private to your account). On
+  the phone, the secret is kept in Orbit's settings, which aren't backed up to the cloud.
+- Still use it only on your home network, not on public or shared Wi-Fi.
 - **Agents** can only reach Orbit from this computer (requests from other machines on the
   network are refused), and never from a web page (a page in your browser can't add the
   `X-Orbit-Agent` header, and its requests carry an `Origin`, which is refused).
@@ -207,13 +239,49 @@ to `run_orbit_desk.bat` in the folder that opens.
 
 ## How it works (for tinkerers)
 
-Plain HTTP on port 47800. For Orbit, with the pairing code in an `X-Orbit-Code` header:
+HTTP on port 47800 (protocol version 3). Anyone may ask `GET /hello` →
+`{"app": "orbit-desk", "name": …, "version": 3}`. Everything else Orbit does needs pairing.
 
-| Path | Answer |
+**Pairing (once).** JSON bodies; binary values are base64.
+
+| Path | Body → answer |
 |---|---|
-| `GET /hello` | `{"app": "orbit-desk", "name": …, "version": 2}`, no code needed |
-| `GET /check` | `200 {"ok": true, "name": …, "paused": …}`, or `401` (wrong code) / `429` (too many tries) |
-| `GET /screen` | `200` JPEG (longest side 1600 px), or `401` / `423` (paused) / `429` / `500` |
+| `POST /pair` | `{"device_id": 32 hex characters (random, kept by the phone), "phone_pub": the phone's P-256 public key as an uncompressed point (65 bytes), "phone_nonce": 16 random bytes}` → `{"desk_pub", "desk_nonce"}` (a new key pair each time), or `400` / `429` (too many wrong codes) |
+| `POST /pair/confirm` | `{"device_id", "phone_proof"}` → `{"ok": true, "name", "version", "desk_proof"}`, or `401` (wrong code; counts toward the limit) / `410` (not started, already tried, or older than 2 minutes) / `429` |
+
+```
+transcript  = device_id (UTF-8), phone_pub, phone_nonce, desk_pub, desk_nonce,
+              each preceded by its length as 4 bytes (big-endian)
+phone_proof = HMAC-SHA256(key = the code, "phone" + transcript)
+desk_proof  = HMAC-SHA256(key = the code, "desk" + transcript)    sent only after phone_proof checks out
+secret      = HKDF-SHA256(ECDH shared secret, salt = SHA-256(transcript), info = "orbit-desk v3"), 32 bytes
+auth_key    = HKDF-SHA256(secret, no salt, info = "auth");   enc_key = the same with info "enc"
+```
+
+Each started pairing gets one confirm. The phone checks `desk_proof` before keeping the secret.
+The computer stores `secret` per `device_id` in `.orbit_desk.json` (`"devices"`).
+
+**Signed requests.** Every request from a paired phone carries:
+
+| Header | Value |
+|---|---|
+| `X-Orbit-Device` | its `device_id` |
+| `X-Orbit-Time` | Unix time in seconds (refused if more than 120 s from the computer's clock) |
+| `X-Orbit-Nonce` | 16 random bytes as hex (refused if seen in the last 10 minutes) |
+| `X-Orbit-Sig` | hex HMAC-SHA256(auth_key, method + "\n" + path with query + "\n" + time + "\n" + nonce + "\n" + hex SHA-256 of the body) |
+
+Unknown device, wrong signature, clock too far off or a reused nonce: `401` with a reason. The
+old `X-Orbit-Code` header (Orbit before version 3) gets `426` "Orbit Desk was updated…".
+
+**Encrypted answers.** A `200` answer to the paths below is `application/octet-stream` with
+`X-Orbit-Enc: 1`: a random 12-byte IV, then AES-256-GCM(enc_key) ciphertext and tag, with the
+request's `X-Orbit-Sig` as additional data (so an answer only fits its own request). Errors are
+plain JSON `{"error": …}`.
+
+| Path | Answer (decrypted) |
+|---|---|
+| `GET /check` | `{"ok": true, "name": …, "paused": …, "version": 3}` |
+| `GET /screen` | JPEG (longest side 1600 px); or `423` (paused) / `500` |
 | `GET /events?since=N&boot=B&present=1&…` | Waits up to 15 s for news newer than `N`, then `{"events": […], "next": N, "boot": B}`. Orbit also reports how it's doing (`present`, `seen`, `asleep`, `talking`, `focus`, `waiting`), for `orbit_status`. A different `boot` (Orbit Desk restarted) starts from the beginning. |
 
 For agents, from this computer only, with the header `X-Orbit-Agent: 1` and no `Origin`:
@@ -225,7 +293,9 @@ For agents, from this computer only, with the header `X-Orbit-Agent: 1` and no `
 | `GET /agent/status` | `{"orbit_connected": …, "person_at_desk": …, "seconds_since_person_seen": …, "orbit_asleep": …, "in_conversation": …, "focus_mode": …, "news_waiting_for_person": …}` |
 
 The MCP server (`orbit_desk.py mcp`) speaks MCP over stdio (protocol versions 2024-11-05 to
-2025-06-18) and passes tool calls to these. Tests: `python -m unittest discover -s desk`.
+2025-06-18) and passes tool calls to these. The agent commands and the MCP server don't need the
+`cryptography` add-on (only the running Orbit Desk does). Tests: `pip install cryptography`, then
+`python -m unittest discover -s desk`.
 
 Finding computers: Orbit broadcasts `ORBIT-DESK?` (UDP, port 47801); Orbit Desk replies
 `ORBIT-DESK <port> <computer name>`. You can build your own Orbit Desk (say, a tray app) as

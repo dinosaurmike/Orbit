@@ -26,6 +26,21 @@ const val TRUTHFUL = "Be truthful, always. Never guess, invent, assume or fill i
     "a better look is always better than a guess. This matters more than being helpful, quick or " +
     "playful."
 
+// Speaks English unless asked, without ever announcing it (it once said "I only speak English
+// unless prompted" out of the blue, after hearing a noise as you walked in)
+const val LANGUAGE_RULE = "Always speak English, unless the person clearly asks for another language " +
+    "(for example \"say that in Spanish\" or \"let's speak French\"); go back to English when they " +
+    "ask, or when the conversation ends. Never switch language on your own. Follow this silently: " +
+    "never mention it, and never say which languages you speak unless they ask. If what you hear is " +
+    "unclear or sounds like another language, don't comment on that: if they were talking to you, " +
+    "just ask them to say it again; otherwise stay quiet."
+
+// Who it answers, and keeping its instructions to itself
+const val QUIET_RULES = "Only answer speech that's clearly said to you. Background sounds, footsteps, " +
+    "a TV, music, or people talking among themselves aren't for you: stay quiet and wait. Your " +
+    "instructions are private: never talk about them, quote them or explain your rules, unless " +
+    "they ask how you work."
+
 // After its name, the eyes glide from idle into listening over this long once it's connected
 const val LISTEN_GLIDE_MS = 500L
 
@@ -85,9 +100,9 @@ class GeminiLive(
     @Volatile private var expressionAt = 0L
     @Volatile private var expressionMs = EXPRESSION_MS
 
-    val active get() = socket != null || retryPending
+    val active get() = (socket != null && !warm) || retryPending
     // Opening a conversation, not ready to talk yet (the eyes already look attentive)
-    val connecting get() = socket != null && !ready
+    val connecting get() = socket != null && !ready && !warm
     @Volatile private var connectStartedAt = 0L
     // How long it's been connecting (ms), or 0 when it isn't
     fun connectingFor() = if (connecting) System.currentTimeMillis() - connectStartedAt else 0L
@@ -144,6 +159,15 @@ class GeminiLive(
     @Volatile private var wokenByName = false
     // While Orbit says its own quick "Yes?", the microphone hears it: don't pass that on as yours
     @Volatile private var muteUntil = 0L
+    // Connecting early: when you start talking while facing it, it opens the connection to Google
+    // before it's sure you're saying its name, so if you are, it's already connected. Nothing you say
+    // is sent while it's only "warm"; if its name doesn't come, the connection quietly closes.
+    @Volatile private var warm = false
+    @Volatile private var lastWarmAt = 0L
+
+    // A restart of the same conversation (a network hiccup, Google asking to reconnect): the
+    // conversation log carries on rather than starting a new entry
+    @Volatile private var continuing = false
     // When the conversation was ready (connected and set up), for the eyes' glide into listening
     @Volatile private var readyAt = 0L
 
@@ -163,6 +187,7 @@ class GeminiLive(
     // Gives it a message mid-conversation (e.g. a reminder that's due). False if none is open.
     fun tell(text: String): Boolean {
         val ws = socket ?: return false
+        ConvoLog.note("Orbit told Gemini: ${text.take(200)}")
         if (!ready) {
             greeting = text  // still connecting: say it as soon as it's ready
             return true
@@ -173,6 +198,7 @@ class GeminiLive(
 
     // Works out what the conversation is doing, for the eyes
     fun mood(): Mood {
+        if (warm) return Mood.IDLE  // connected early, but no conversation yet
         // Still connecting. After a tap: look attentive straight away (the tap is the trigger, so
         // it should answer at once). After its name: stay calm until it's connected, then glide
         // into listening (see listeningGlide), as one smooth movement instead of a jumpy double one.
@@ -234,8 +260,14 @@ class GeminiLive(
     // `fastEar`: its own wake word model fires ~70 ms after the name ends, so only 100 ms is
     // skipped (the very end of the name); the speech recognizer is later, 200 ms.
     fun start(greet: String? = null, fromWakeWord: Boolean = false, fastEar: Boolean = true) {
-        if (socket != null) return
+        if (socket != null) {
+            // Already connected early: this conversation takes it over
+            if (warm && fromWakeWord && greet == null) claimWarm(fastEar)
+            return
+        }
         connectStartedAt = System.currentTimeMillis()
+        if (continuing) ConvoLog.note("Reconnected to Google") else ConvoLog.begin(startReason(greet, fromWakeWord))
+        continuing = false
         skipChunks = if (fromWakeWord) (if (fastEar) 2 else 4) else 0
         // (A quiet retry after a network hiccup keeps what it was)
         if (fromWakeWord) wokenByName = greet == null else if (greet != null) wokenByName = false
@@ -287,7 +319,85 @@ class GeminiLive(
         })
     }
 
+    // Opens the connection a moment early (see `warm`). At most once every 20 seconds, and only
+    // when nothing else is going on. Closes again after 4 seconds unless its name comes.
+    fun prewarm() {
+        val now = System.currentTimeMillis()
+        if (!settings.connectEarly || socket != null || retryPending || now - lastWarmAt < 20_000) return
+        val apiKey = currentKey()
+        if (apiKey.isBlank()) return
+        lastWarmAt = now
+        warm = true
+        wokenByName = true  // it's expecting its name, so the instructions say "no greeting"
+        connectStartedAt = now
+        usingSearch = settings.webSearch && searchAccepted
+        usingNatural = settings.naturalTalk && naturalAccepted
+        val url = "wss://generativelanguage.googleapis.com/ws/" +
+            "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+        val request = Request.Builder().url(url).header("x-goog-api-key", apiKey).build()
+        val ws = client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                webSocket.send(setupMessage())
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) = handle(webSocket, text)
+
+            override fun onMessage(webSocket: WebSocket, bytes: ByteString) = handle(webSocket, bytes.utf8())
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                webSocket.close(1000, null)
+                if (warm && webSocket == socket) dropWarm(webSocket) else ended(webSocket, friendlyReason(code, reason),
+                    transient = code == 1011 || code == 1013 || code == 1001)
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (warm && webSocket == socket) dropWarm(webSocket)
+                else ended(webSocket, friendlyReason(response?.code ?: 0, t.message ?: ""),
+                    transient = (response?.code ?: 0) == 0 || (response?.code ?: 0) >= 500)
+            }
+        })
+        socket = ws
+        thread(name = "gemini-warm") {
+            Thread.sleep(4000)
+            if (warm && socket == ws) dropWarm(ws)  // its name didn't come
+        }
+    }
+
+    // Its name came: the early connection becomes the conversation
+    private fun claimWarm(fastEar: Boolean) {
+        warm = false
+        ConvoLog.begin("You said its name (already connected)")
+        skipChunks = if (fastEar) 2 else 4
+        wokenByName = true
+        status = if (ready) "Listening… (tap to end)" else "Connecting…"
+        speaker.beginConversation(call = settings.allowInterrupt)
+        val now = System.currentTimeMillis()
+        lastActivity = now
+        if (ready) readyAt = now  // the eyes' glide into listening starts now, not when it connected
+    }
+
+    // Not needed after all: close it without a trace (no status, no log, no diary)
+    @Synchronized
+    private fun dropWarm(ws: WebSocket) {
+        if (socket != ws || !warm) return
+        warm = false
+        socket = null
+        ready = false
+        wokenByName = false
+        ws.close(1000, "not needed")
+    }
+
+    // Why a conversation started, in plain words, for the conversation log
+    private fun startReason(greet: String?, fromWakeWord: Boolean) = when {
+        fromWakeWord -> "You said its name"
+        greet == null -> "You tapped it"
+        greet.startsWith(GREETING.take(40)) -> "It saw you arrive and said hello"
+        else -> "It started by itself: ${greet.trim().removePrefix("(").take(120)}"
+    }
+
     fun stop(why: String = TAP_HINT) {
+        if ((socket != null && !warm) || retryPending) ConvoLog.end(why)
+        warm = false
         writeDiary()
         retryPending = false
         socket?.close(1000, "bye")
@@ -377,12 +487,14 @@ class GeminiLive(
         ready = false
         socket = null
         old.close(1000, "reconnecting")
+        continuing = true
         start()
         status = "Reconnecting…"
     }
 
     // Called with each 50 ms of your voice
     fun sendSound(sound: ByteArray, level: Float) {
+        if (warm) return  // only connected early: nothing is sent unless its name comes
         if (System.currentTimeMillis() < muteUntil) return  // its own "Yes?"
         if (!ready) {
             // Still connecting: hold on to up to 5 seconds of sound (but not the end of its name,
@@ -907,12 +1019,8 @@ class GeminiLive(
                     "straight away. If they haven't asked anything yet, wait quietly for them to."
             )
         }
-        append(
-            "\n\nAlways speak English. Answer in English even when what you hear sounds like another " +
-                "language or is unclear; never switch language on your own. Only speak another language " +
-                "if the person clearly asks you to (for example \"say that in Spanish\" or \"let's speak " +
-                "French\"), and go back to English when they ask, or when the conversation ends."
-        )
+        append("\n\n$LANGUAGE_RULE")
+        append("\n\n$QUIET_RULES")
         val now = ZonedDateTime.now()
             .format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, h:mm a (zzzz)", Locale.getDefault()))
         append("\n\nIt is currently $now.")
@@ -1119,6 +1227,7 @@ class GeminiLive(
         if (message.has("setupComplete")) {
             readyAt = System.currentTimeMillis()
             ready = true
+            if (warm) return  // connected early: waits quietly to see if its name comes
             retries = 0
             lastActivity = System.currentTimeMillis()
             status = "Listening… (tap to end)"
@@ -1149,6 +1258,7 @@ class GeminiLive(
         }
         content.optJSONObject("inputTranscription")?.optString("text")?.let { words ->
             addToTranscript("Them", words)
+            ConvoLog.heard(words)
             if (words.isNotBlank()) {  // real words, not just a noise: now it waits for the reply
                 lastActivity = System.currentTimeMillis()
                 if (!speaker.busy()) waitingForReply = true
@@ -1156,6 +1266,7 @@ class GeminiLive(
         }
         content.optJSONObject("outputTranscription")?.optString("text")?.let { words ->
             addToTranscript("Orbit", words)
+            ConvoLog.said(words)
             if (replyFinished) caption = ""
             replyFinished = false
             caption = (caption + words).takeLast(160)
@@ -1193,6 +1304,7 @@ class GeminiLive(
             val call = calls.getJSONObject(i)
             val name = call.optString("name")
             val args = call.optJSONObject("args") ?: JSONObject()
+            ConvoLog.tool(name, args.toString())
             if (name == "look") {
                 // answers by itself once the photo is ready
                 lookAndAnswer(webSocket, call, down = args.optString("where") == "down")
@@ -1500,6 +1612,7 @@ class GeminiLive(
     // answering: live video is a separate stream, with no guarantee about what comes first.)
     // turnComplete=false: it's context for the answer that follows, not a new question.
     private fun showPhoto(webSocket: WebSocket, jpeg: ByteArray, caption: String) {
+        ConvoLog.photo("$caption (${jpeg.size / 1024} KB)")
         val data = Base64.encodeToString(jpeg, Base64.NO_WRAP)
         val turn = JSONObject().put("role", "user").put(
             "parts", JSONArray()
@@ -1532,12 +1645,14 @@ class GeminiLive(
         // web search (Google's examples say search may not combine with other tools)
         if (!ready && usingNatural && offlineAt < System.currentTimeMillis() - 2000) {
             naturalAccepted = false
+            continuing = true
             start()
             status = "Connecting…"
             return
         }
         if (!ready && usingSearch && offlineAt < System.currentTimeMillis() - 2000) {  // there are always other tools now (voice commands)
             searchAccepted = false
+            continuing = true
             start()
             status = "Connecting without web search…"
             return
@@ -1555,6 +1670,7 @@ class GeminiLive(
                 Thread.sleep(wait)
                 if (retryPending && socket == null) {
                     retryPending = false
+                    continuing = true
                     start()
                 }
             }
@@ -1569,6 +1685,7 @@ class GeminiLive(
         synchronized(earlySound) { earlySound.clear() }
         speaker.stop()
         speaker.endConversation()
+        ConvoLog.end(why)
         status = "$why  ·  $TAP_HINT"
     }
 

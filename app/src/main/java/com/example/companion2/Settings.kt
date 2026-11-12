@@ -1,5 +1,6 @@
 package com.example.companion2
 
+import androidx.core.content.edit
 import android.content.Context
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -56,7 +57,9 @@ const val EXPRESSION_MS = 2500
 // Kept deliberately small: a quick hello, not a conversation starter.
 const val GREETING = "(The person just came back and sat down in front of you. Say a quick, " +
     "casual hello of just a few words, like \"Hey!\", \"Oh hi\" or \"Morning!\" to suit the " +
-    "time of day. Don't ask a question or start a conversation; let them talk if they want to.)"
+    "time of day. Don't ask a question or start a conversation; let them talk if they want to. " +
+    "After your hello, stay quiet until they actually speak to you: sounds around the room aren't " +
+    "for you.)"
 
 // Added to the greeting once a day, if "Notice things when I arrive" is on (needs vision)
 const val NOTICE = " Also, once, use the look tool to glance at them, and if you notice " +
@@ -114,7 +117,7 @@ fun reminderDue(what: String) = "(A reminder the person asked you for is due rig
 class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("companion_settings", Context.MODE_PRIVATE)
 
-    var apiKey by text("apiKey", "")                  // blank = use local.properties key
+    var apiKey by secret("apiKey")                    // sealed with the Keystore; blank = local.properties key
     var voice by text("voice", "Puck")
     var personality by text("personality", DEFAULT_PERSONALITY)
     var companionName by text("companionName", "Orbit")  // what it's called
@@ -132,6 +135,8 @@ class Settings(context: Context) {
     var vision by switch("vision", true)              // may take a photo when you ask it to look
     var wakePhrase by text("wakePhrase", "orbit, orby")  // wake words, separated by commas
     var fastWake by switch("fastWake", true)         // Orbit's own trained ear for its name (faster)
+    var connectEarly by switch("connectEarly", true) // connect to Google as you start talking to it
+    var earThreshold by number("earThreshold", 0.5f)  // how sure the fast ear must be (learned from your voice)
     var wakeReply by switch("wakeReply", true)       // answers "Yes?" the moment it hears its name
 
     // Night (Device page): dim or sleep during set hours
@@ -199,9 +204,19 @@ class Settings(context: Context) {
     var deskOn by switch("deskOn", false)
     var deskAddress by text("deskAddress", "")        // e.g. 192.168.1.23:47800
     var deskCode by text("deskCode", "")              // the 6-digit pairing code it shows
+    var deskSecret by secret("deskSecret")            // shared with the paired computer (base64), sealed
+    var deskDeviceId by text("deskDeviceId", "")      // this phone's random name for Orbit Desk
     var deskName by text("deskName", "")              // the computer's name
     var deskOnLeft by switch("deskOnLeft", false)     // which way to glance when looking at it
-    var deskScreen by switch("deskScreen", true)      // use Orbit Desk's screenshots for screen looks
+    var deskScreen by switch("deskScreen", true)
+    var convoLogOn by switch("convoLogOn", true)      // detailed log of recent conversations (Privacy)
+    // Update notices: once a day it asks GitHub for the latest version number (see Updates.kt)
+    var updateCheck by switch("updateCheck", true)
+    var latestVersion by text("latestVersion", "")
+    private var lastUpdateCheckText by text("lastUpdateCheck", "")
+    var lastUpdateCheck: Long
+        get() = lastUpdateCheckText.toLongOrNull() ?: 0L
+        set(value) { lastUpdateCheckText = value.toString() }      // use Orbit Desk's screenshots for screen looks
     // News from coding agents and scripts on the computer, through Orbit Desk
     var agentsOn by switch("agentsOn", true)
     var agentSpeak by switch("agentSpeak", true)      // say the news out loud (in its own voice)
@@ -557,8 +572,36 @@ class Settings(context: Context) {
         override fun getValue(thisRef: Any?, property: KProperty<*>) = state.value
         override fun setValue(thisRef: Any?, property: KProperty<*>, value: String) {
             state.value = value
-            prefs.edit().putString(key, value).apply()
+            prefs.edit { putString(key, value) }
         }
+    }
+
+    // A secret: kept sealed (see SecretBox), in memory only while the app runs. An older plain copy
+    // is sealed and removed the first time it's read. If the Keystore isn't working on this phone,
+    // it's kept the old way rather than lost.
+    private fun secret(key: String) = object : ReadWriteProperty<Any?, String> {
+        val sealedKey = "${key}Sealed"
+        val state = mutableStateOf(loadSecret(key, sealedKey))
+        override fun getValue(thisRef: Any?, property: KProperty<*>) = state.value
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: String) {
+            state.value = value
+            val sealed = if (value.isEmpty()) "" else SecretBox.seal(value)
+            if (sealed != null) {
+                prefs.edit { putString(sealedKey, sealed); remove(key) }
+            } else {
+                prefs.edit { putString(key, value); remove(sealedKey) }
+            }
+        }
+    }
+
+    private fun loadSecret(key: String, sealedKey: String): String {
+        val sealed = prefs.getString(sealedKey, "").orEmpty()
+        if (sealed.isNotEmpty()) return SecretBox.open(sealed).orEmpty()  // can't open: ask for it again
+        val plain = prefs.getString(key, "").orEmpty()
+        if (plain.isNotEmpty()) {
+            SecretBox.seal(plain)?.let { prefs.edit { putString(sealedKey, it); remove(key) } }
+        }
+        return plain
     }
 
     private fun number(key: String, default: Float) = object : ReadWriteProperty<Any?, Float> {
@@ -566,7 +609,7 @@ class Settings(context: Context) {
         override fun getValue(thisRef: Any?, property: KProperty<*>) = state.floatValue
         override fun setValue(thisRef: Any?, property: KProperty<*>, value: Float) {
             state.floatValue = value
-            prefs.edit().putFloat(key, value).apply()
+            prefs.edit { putFloat(key, value) }
         }
     }
 
@@ -575,7 +618,7 @@ class Settings(context: Context) {
         override fun getValue(thisRef: Any?, property: KProperty<*>) = state.value
         override fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) {
             state.value = value
-            prefs.edit().putBoolean(key, value).apply()
+            prefs.edit { putBoolean(key, value) }
         }
     }
 }

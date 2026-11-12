@@ -2,12 +2,13 @@
 
 package com.example.companion2
 
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.core.net.toUri
 import android.app.Activity
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
-import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -156,7 +157,7 @@ fun SettingsScreen(
     onClose: () -> Unit
 ) {
     // Opens on Orbit, or on Device if there's no key yet (that's where it goes)
-    var tab by remember { mutableStateOf(if (gemini.hasKey()) 0 else SECTIONS.lastIndex) }
+    var tab by remember { mutableIntStateOf(if (gemini.hasKey()) 0 else SECTIONS.lastIndex) }
 
     MaterialTheme(colorScheme = SettingsColors) {
         Box(
@@ -777,7 +778,7 @@ fun ApplianceSettings(settings: Settings) {
         context.startActivity(
             Intent(
                 android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:${context.packageName}")
+                "package:${context.packageName}".toUri()
             ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
     }
@@ -1050,6 +1051,9 @@ fun ComputerSettings(settings: Settings, desk: DeskLink) {
     var searching by remember { mutableStateOf(false) }
     var found by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
     var testResult by remember { mutableStateOf("") }
+    // The code is only needed while pairing, so it isn't saved. (Versions before pairing saved
+    // it: it's filled in here, so after updating, tapping Pair is enough.)
+    var code by remember { mutableStateOf(settings.deskCode) }
     // How the agent-news connection is doing (checked once a second while this page is open)
     var agentState by remember { mutableStateOf(desk.agentState) }
     LaunchedEffect(Unit) {
@@ -1100,7 +1104,8 @@ fun ComputerSettings(settings: Settings, desk: DeskLink) {
         SettingTitle(
             "Setting it up",
             "1) On the computer, run Orbit Desk (the desk folder on the Orbit GitHub page has it " +
-                "and the steps). 2) Tap Find my computer. 3) Type the pairing code it shows. 4) Test."
+                "and the steps). 2) Tap Find my computer. 3) Type the pairing code it shows and tap " +
+                "Pair (only once: after that the connection is encrypted). 4) Test."
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = {
@@ -1111,7 +1116,9 @@ fun ComputerSettings(settings: Settings, desk: DeskLink) {
                     searching = false
                 }
             }, enabled = !searching) { Text(if (searching) "Looking…" else "Find my computer") }
-            if (settings.deskName.isNotBlank()) Text("Paired: ${settings.deskName}", color = Color.White)
+            if (settings.deskSecret.isNotBlank() && settings.deskName.isNotBlank()) {
+                Text("Paired: ${settings.deskName}", color = Color.White)
+            }
         }
         found?.let { list ->
             if (list.isEmpty()) {
@@ -1139,17 +1146,27 @@ fun ComputerSettings(settings: Settings, desk: DeskLink) {
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
-                value = settings.deskCode,
-                onValueChange = { settings.deskCode = it.filter { c -> c.isDigit() }.take(6) },
+                value = code,
+                onValueChange = { code = it.filter { c -> c.isDigit() }.take(6) },
                 singleLine = true,
                 label = { Text("Pairing code") },
                 modifier = Modifier.weight(1f)
             )
             Spacer(Modifier.width(8.dp))
             Button(onClick = {
-                testResult = "Testing…"
-                desk.test { testResult = it }
-            }, enabled = settings.deskAddress.isNotBlank()) { Text("Test") }
+                testResult = "Pairing…"
+                desk.pair(code) {
+                    testResult = it
+                    if (it.startsWith("✓")) code = ""
+                }
+            }, enabled = settings.deskAddress.isNotBlank() && code.length == 6) { Text("Pair") }
+            if (settings.deskSecret.isNotBlank()) {
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = {
+                    testResult = "Testing…"
+                    desk.test { testResult = it }
+                }, enabled = settings.deskAddress.isNotBlank()) { Text("Test") }
+            }
         }
         if (testResult.isNotEmpty()) Text(testResult, color = Accent)
 
@@ -1271,7 +1288,7 @@ fun AboutPage() {
 // The neck's firmware: which version it runs, and a one-tap update when the app has a newer one
 @Composable
 private fun NeckUpdate(link: NeckLink) {
-    var firmware by remember { mutableStateOf(link.firmware) }
+    var firmware by remember { mutableIntStateOf(link.firmware) }
     var progress by remember { mutableFloatStateOf(0f) }
     var updating by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }

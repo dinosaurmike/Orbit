@@ -1,5 +1,6 @@
 package com.example.companion2
 
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -169,7 +170,7 @@ fun Face(
     // so nothing stays still on screen for hours (which could burn into the screen).
     var status by remember { mutableStateOf("") }
     var statusAlpha by remember { mutableFloatStateOf(1f) }
-    var statusChanged by remember { mutableStateOf(0L) }
+    var statusChanged by remember { mutableLongStateOf(0L) }
     // Captions: what Orbit is saying, shown while it talks and briefly after
     var caption by remember { mutableStateOf("") }
     var captionAlpha by remember { mutableFloatStateOf(0f) }
