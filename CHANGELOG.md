@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.2 (unreleased)
+## 0.1.2 (2026-11-12)
 
 - Fixed: 0.1.1 stopped every time it opened. GLaDOS mode checked its setting before the settings
   were loaded. A new test now checks that start-up never uses a part before it's ready.
