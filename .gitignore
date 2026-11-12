@@ -15,3 +15,5 @@ CLAUDE.local.md
 *.jks
 *.keystore
 keystore.properties
+# Python
+__pycache__/
