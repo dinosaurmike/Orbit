@@ -2,6 +2,14 @@
 
 ## 0.1.1 (unreleased)
 
+- GLaDOS mode (Settings → Device): hang Orbit upside down from a shelf or the ceiling. The eyes and
+  cameras turn the right way up, the neck's turn and tilt swap to match, and Find my screen looks
+  down first (hanging, your screen is below it). See neck/NECK_SETUP.md.
+- Orbit Desk: agents can send any language and emoji. On Windows, a message with an emoji
+  ("Build ✅") could stop the MCP and hook commands, or crash the window's log line; text from
+  agents is now read as UTF-8, and anything the window can't show prints as "?". Saving the
+  settings file is also safe when two phones pair at once, and retries if Windows briefly has the
+  file open.
 - "What just happened?": Settings → Privacy → Recent conversations, in detail. The last 10
   conversations: why each one started (its name, a tap, an arrival hello), what it heard and said,
   which tools it used and with what, photos it looked at, and how it ended. Kept on the phone;
