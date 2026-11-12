@@ -1,5 +1,5 @@
 # Tests Orbit Desk (desk/orbit_desk.py: screen sharing, agent news, the MCP server) on Windows,
-# macOS and Linux, with the oldest and newest Python it supports. Only the cryptography add-on is
+# macOS and Linux, with the oldest and newest Python still supported. Only the cryptography add-on is
 # needed (screen capture isn't tested; the agent commands are also tested without cryptography).
 name: Orbit Desk
 
@@ -20,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python: ['3.9', '3.13']
+        python: ['3.10', '3.13']  # the oldest still supported, and the newest
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
