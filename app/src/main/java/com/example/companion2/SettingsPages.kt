@@ -825,6 +825,30 @@ fun DevicePage(
     // A quick health check: everything important at a glance, refreshed every second
     StatusChecks(settings, gemini, heat, neck, player)
 
+    // It stopped unexpectedly last time: what went wrong, to copy and share
+    val context = LocalContext.current
+    var crash by remember { mutableStateOf(CrashReport.read(context.filesDir)) }
+    var crashCopied by remember { mutableStateOf(false) }
+    crash?.let { report ->
+        InfoCard(
+            "Orbit stopped unexpectedly",
+            report.lineSequence().first() + ". Copy the report to share it when asking for help " +
+                "(it only says where in Orbit's code it stopped, nothing about you)."
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Orbit crash report", report))
+                    crashCopied = true
+                }) { Text(if (crashCopied) "Copied" else "Copy report") }
+                TextButton(onClick = {
+                    CrashReport.clear(context.filesDir)
+                    crash = null
+                }) { Text("Dismiss") }
+            }
+        }
+    }
+
     // A newer Orbit is out (it checks GitHub once a day)
     Updates(settings, BuildConfig.VERSION_NAME).available()?.let { newer ->
         val links = LocalUriHandler.current

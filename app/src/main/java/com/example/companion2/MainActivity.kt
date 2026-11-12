@@ -139,11 +139,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // First of all, so even a crash while starting up is kept (Settings → Device shows it)
+        comeBackAfterCrashes()
 
         // Keep the screen on while the app is open
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        // GLaDOS mode: hanging upside down, so the screen turns over (before anything is drawn)
-        applyHanging()
 
         // Use the whole screen, including beside the camera hole, with no dark strip
         // behind the navigation bar area
@@ -157,10 +157,12 @@ class MainActivity : ComponentActivity() {
         hideSystemBars()
 
         settings = Settings(this)
+        // GLaDOS mode: hanging upside down, so the screen turns over (before anything is drawn;
+        // needs the settings, so it comes right after them)
+        applyHanging()
         // The detailed log of recent conversations (Settings → Privacy), kept on the phone
         ConvoLog.init(filesDir)
         ConvoLog.enabled = settings.convoLogOn
-        comeBackAfterCrashes()
         // Test builds may fall back to your own key from local.properties; published builds never do
         gemini = GeminiLive(
             settings,
@@ -610,11 +612,13 @@ class MainActivity : ComponentActivity() {
         val usual = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             Log.e("Orbit", "Crashed", error)
+            CrashReport.save(filesDir, error, BuildConfig.VERSION_NAME)
             val crashes = getSharedPreferences("orbit_crashes", MODE_PRIVATE)
             val now = System.currentTimeMillis()
             val previous = crashes.getLong("last", 0L)
             saveCrashTime(crashes, now)
-            if (settings.comeBack && now - previous > 60_000) {
+            // Starts again by itself (once a minute at most), unless it crashed while starting
+            if (::settings.isInitialized && settings.comeBack && now - previous > 60_000) {
                 try {
                     startActivity(
                         Intent(this, MainActivity::class.java)
