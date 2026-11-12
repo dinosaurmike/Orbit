@@ -1,0 +1,128 @@
+# Orbit's behaviour bench (tools/behavior): does Gemini still follow Orbit's instructions?
+#   tests – when the bench or Orbit's instructions change: the bench's own tests, against a fake
+#           Gemini. No key needed, nothing is sent to Google.
+#   live  – every night, and on demand (Actions → Gemini behaviour → Run workflow): Orbit's real
+#           instructions against the real Gemini Live API, a few runs per scenario. Needs the
+#           GEMINI_API_KEY repository secret; without it the job skips itself with a notice.
+#           The report is on the run's summary page and attached as "behavior-report".
+name: Gemini behaviour
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/behavior/**'
+      - 'app/src/main/java/com/example/companion2/GeminiLive.kt'
+      - 'app/src/main/java/com/example/companion2/Settings.kt'
+      - 'app/src/main/java/com/example/companion2/Expressions.kt'
+      - '.github/workflows/gemini-behavior.yml'
+  pull_request:
+    paths:
+      - 'tools/behavior/**'
+      - 'app/src/main/java/com/example/companion2/GeminiLive.kt'
+      - 'app/src/main/java/com/example/companion2/Settings.kt'
+      - 'app/src/main/java/com/example/companion2/Expressions.kt'
+      - '.github/workflows/gemini-behavior.yml'
+  schedule:
+    - cron: '23 7 * * *'   # every night, 07:23 UTC
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: 'How many times to run each scenario'
+        default: '3'
+      only:
+        description: 'Only these scenarios (comma-separated; blank = all)'
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install the bench's packages
+        run: python -m pip install -r tools/behavior/requirements.txt
+      - name: Bench tests (fake Gemini)
+        run: python -m unittest discover -s tools/behavior -v
+
+  live:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: gemini-behavior-live   # one at a time: the free tier allows few sessions at once
+      cancel-in-progress: false
+    steps:
+      - name: Check for the API key
+        id: key
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "::notice title=Behaviour bench skipped::add the GEMINI_API_KEY secret to enable (Settings → Secrets and variables → Actions → New repository secret)"
+            {
+              echo "### Behaviour bench skipped"
+              echo
+              echo "add the GEMINI_API_KEY secret to enable: Settings → Secrets and variables → Actions → New repository secret, named \`GEMINI_API_KEY\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.key.outputs.present == 'true'
+
+      - uses: actions/setup-python@v6
+        if: steps.key.outputs.present == 'true'
+        with:
+          python-version: '3.12'
+
+      # espeak-ng makes the Spanish background voice for the arrival_quiet scenario
+      - name: Install the bench's packages and espeak-ng
+        if: steps.key.outputs.present == 'true'
+        run: |
+          python -m pip install -r tools/behavior/requirements.txt
+          sudo apt-get update -q
+          sudo apt-get install -y -q espeak-ng
+
+      # Cheap and quick: don't spend any of the allowance if the bench itself is broken
+      - name: Bench tests (fake Gemini)
+        if: steps.key.outputs.present == 'true'
+        run: python -m unittest discover -s tools/behavior
+
+      - name: Behaviour bench (real Gemini)
+        if: steps.key.outputs.present == 'true'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RUNS: ${{ inputs.runs || '3' }}
+          ONLY: ${{ inputs.only || '' }}
+        run: |
+          args=(--runs "$RUNS" --report behavior-report.md)
+          if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
+          python tools/behavior/run_behavior.py "${args[@]}"
+
+      - name: Add the report to the summary
+        if: always() && steps.key.outputs.present == 'true'
+        run: |
+          if [ -f behavior-report.md ]; then
+            cat behavior-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "The bench didn't write a report: see the step above for why." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the report
+        if: always() && steps.key.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: behavior-report
+          path: behavior-report.md
+          if-no-files-found: ignore
+          retention-days: 30

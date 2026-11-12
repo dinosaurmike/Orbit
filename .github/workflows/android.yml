@@ -1,5 +1,5 @@
 # Runs on every push and pull request:
-#   build   – unit tests, then builds the debug APK; Android Lint writes a report
+#   build   – unit tests, the debug APK, and Android Lint (fails on any warning; see app/lint.xml)
 #   release – (not for pull requests) the signed release APK, checked against v0.1.0's signature;
 #             attached to the GitHub release when one is published
 #   secrets – scans every file and every past commit for API keys and passwords (gitleaks)
@@ -41,15 +41,17 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Release helper tests
+        run: python3 -m unittest discover -s tools/release
+
       # No API key is needed: debug builds read GEMINI_API_KEY from local.properties only if it exists.
       - name: Unit tests and debug APK
         run: |
           chmod +x gradlew
           ./gradlew testDebugUnitTest assembleDebug --stacktrace
 
-      # Reports for now; once the existing warnings are cleaned up this step will fail on errors.
+      # Fails on any error or warning (a few checks are switched off on purpose: app/lint.xml)
       - name: Android Lint
-        continue-on-error: true
         run: ./gradlew lintDebug
 
       - name: Upload test and lint reports
