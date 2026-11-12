@@ -23,8 +23,8 @@ android {
         applicationId = "io.github.dinosaurmike.orbit"
         minSdk = 28
         targetSdk = 37
-        versionCode = 1          // raise by 1 for every release
-        versionName = "0.1.0"    // what people see
+        versionCode = 2          // raise by 1 for every release
+        versionName = "0.1.1"    // what people see
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

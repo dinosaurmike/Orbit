@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.1 (unreleased)
+## 0.1.1 (2026-11-12)
 
 - GLaDOS mode (Settings → Device): hang Orbit upside down from a shelf or the ceiling. The eyes and
   cameras turn the right way up, the neck's turn and tilt swap to match, and Find my screen looks
