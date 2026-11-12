@@ -1,10 +1,15 @@
 # Changelog
 
-## 0.1.1 (unreleased)
+## 0.1.2 (unreleased)
 
+- Fixed: 0.1.1 stopped every time it opened. GLaDOS mode checked its setting before the settings
+  were loaded. A new test now checks that start-up never uses a part before it's ready.
 - If Orbit ever stops unexpectedly, Settings → Device shows "Orbit stopped unexpectedly" with a
   Copy report button (where in the code it stopped; nothing about you), even for a crash while
-  starting. A new test checks that start-up never uses a part before it's ready.
+  starting.
+
+## 0.1.1 (2026-11-12)
+
 - GLaDOS mode (Settings → Device): hang Orbit upside down from a shelf or the ceiling. The eyes and
   cameras turn the right way up, the neck's turn and tilt swap to match, and Find my screen looks
   down first (hanging, your screen is below it). See neck/NECK_SETUP.md.
