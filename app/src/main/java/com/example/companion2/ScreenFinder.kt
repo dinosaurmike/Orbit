@@ -41,8 +41,11 @@ class ScreenFinder(
                 // 1. A wide look round: 7 photos across the whole range. With the back camera the
                 //    screen is usually above it (Orbit sits on the desk), so it looks with its
                 //    face tilted down (the back camera tilts up) first, then level: 14 photos.
+                //    Hanging (GLaDOS mode), the screen is usually below it, so it's the other way:
+                //    the camera in use looks down first.
+                val tilts = searchTilts(settings.glados, usingBack, settings.tiltUp, settings.tiltDown)
                 val step = 2f * range / 6f
-                val rows = if (usingBack) listOf(settings.tiltDown * 0.7f, 0f) else listOf(0f)
+                val rows = tilts.first
                 val wide = rows.flatMap { tilt -> (0..6).map { -range + it * step to tilt } }
                 val rough = pick(wide, key, "Which photo shows a computer screen or monitor? If several " +
                     "do, pick the one where it's biggest and nearest the middle.")
@@ -55,11 +58,8 @@ class ScreenFinder(
                 // 3. Up and down. Screens usually sit higher than Orbit: the front camera looks up
                 // when the head tilts up; the back camera looks up when the head tilts down (all
                 // the way down = the back camera at its highest).
-                val heights = (if (usingBack) {
-                    listOf(settings.tiltDown, settings.tiltDown * 0.7f, settings.tiltDown * 0.4f, 0f, -settings.tiltUp * 0.4f)
-                } else {
-                    listOf(-settings.tiltUp * 0.7f, -settings.tiltUp * 0.3f, 0f, settings.tiltDown * 0.3f)
-                }).map { side.first to it }
+                // Hanging, it's the other way round (the screen is usually below).
+                val heights = tilts.second.map { side.first to it }
                 val best = pick(heights, key, "Which photo shows the computer screen most completely, " +
                     "closest to the middle of the photo from top to bottom?") ?: side
                 // Point there and remember it
@@ -124,3 +124,15 @@ class ScreenFinder(
         return photo
     }
 }
+
+// The tilts Find my screen tries (negative = face up, positive = face down): the rows of the wide
+// look, then the heights of the last step. The front camera looks the way the face does; the back
+// camera the opposite way. On the desk the screen is usually above Orbit; hanging (GLaDOS mode),
+// below it.
+fun searchTilts(hanging: Boolean, usingBack: Boolean, up: Float, down: Float): Pair<List<Float>, List<Float>> =
+    when {
+        hanging && usingBack -> listOf(-up * 0.7f, 0f) to listOf(-up, -up * 0.7f, -up * 0.4f, 0f, down * 0.4f)
+        hanging -> listOf(down * 0.7f, 0f) to listOf(down, down * 0.7f, down * 0.4f, 0f, -up * 0.3f)
+        usingBack -> listOf(down * 0.7f, 0f) to listOf(down, down * 0.7f, down * 0.4f, 0f, -up * 0.4f)
+        else -> listOf(0f) to listOf(-up * 0.7f, -up * 0.3f, 0f, down * 0.3f)
+    }

@@ -866,6 +866,15 @@ fun DevicePage(
         Slider(value = settings.nightEnd, onValueChange = { settings.nightEnd = it }, valueRange = 0f..23f, steps = 22)
     }
 
+    SwitchSetting(
+        "GLaDOS mode",
+        "For hanging Orbit upside down from a shelf or the ceiling. The eyes and cameras turn the " +
+            "right way up, and the neck's turn and tilt swap to match. Hanging above your screen, " +
+            "Find my screen looks down for it. After hanging it, check the neck's Look up and Look " +
+            "down limits, and give the cable a loop so it never carries the weight.",
+        settings.glados
+    ) { settings.glados = it }
+
     MoreOptions(if (settings.neckOn) "Neck" else "Add a neck (optional)") {
         NeckSettings(settings, neck, gemini, onFindScreen)
     }

@@ -445,13 +445,22 @@ class Neck(
     // Converts the pose to servo angles and sends it, when it has changed (or once a second,
     // so the ESP32 knows the phone is still there)
     private fun send(now: Long) {
-        val servoPan = settings.panCenter + if (settings.flipPan) -pan else pan
-        val servoTilt = settings.tiltCenter + if (settings.flipTilt) -tilt else tilt
+        // Hanging upside down (GLaDOS mode) turns both servos over: a turn to the right looks like a
+        // turn to the left from below, and tilting up tilts down. Swapping both keeps every look
+        // the same way round for you.
+        val servoPan = servoAngle(settings.panCenter, pan, settings.flipPan, settings.glados)
+        val servoTilt = servoAngle(settings.tiltCenter, tilt, settings.flipTilt, settings.glados)
         val line = String.format(Locale.US, "M %.1f %.1f\n", servoPan, servoTilt)
         if (line == lastSent && now - lastSentAt < 1000) return
         lastSent = line
         lastSentAt = now
         link.send(line)
+    }
+
+    companion object {
+        // A look (degrees from straight ahead) as a servo angle
+        fun servoAngle(center: Float, look: Float, flip: Boolean, hanging: Boolean) =
+            center + if (flip != hanging) -look else look
     }
 
     // How far v is past a dead zone around zero (0 inside it)

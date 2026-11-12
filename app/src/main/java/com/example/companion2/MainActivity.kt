@@ -4,6 +4,7 @@ import androidx.core.content.edit
 import android.annotation.SuppressLint
 import android.Manifest
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -112,6 +113,7 @@ class MainActivity : ComponentActivity() {
     // Real photos from the front camera, for "what am I holding?" and "what's on my desk?" (the
     // face-tracking frames are only 640×480: too small to see things properly)
     @Volatile private var frontCapture: ImageCapture? = null
+    private var cameraRotation: Int? = null  // which way up the screen was when the front camera started
     // The back camera, switched on for a moment to look at the computer screen
     private var backCapture: ImageCapture? = null
     @Volatile private var backUsedAt = 0L
@@ -140,6 +142,8 @@ class MainActivity : ComponentActivity() {
 
         // Keep the screen on while the app is open
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // GLaDOS mode: hanging upside down, so the screen turns over (before anything is drawn)
+        applyHanging()
 
         // Use the whole screen, including beside the camera hole, with no dark strip
         // behind the navigation bar area
@@ -378,6 +382,8 @@ class MainActivity : ComponentActivity() {
                     goToSleep()
                 }
                 if (gemini.active) player.duck() else if (now - maybeCalledAt > 3000) player.unduck()
+                // GLaDOS mode switched on or off: turn the screen over, then the cameras
+                applyHanging()
                 delay(1000)
             }
         }
@@ -766,6 +772,23 @@ class MainActivity : ComponentActivity() {
         gemini.stop()
     }
 
+    // GLaDOS mode (hanging upside down from a shelf or the ceiling): the screen turns over so the
+    // eyes are the right way up. The cameras learn which way up the screen is when they start, so
+    // once the screen has turned, they start again (unless the back camera is busy; it restarts the
+    // front camera itself when it's done). The neck turns over in Neck.send.
+    private fun applyHanging() {
+        val wanted = if (settings.glados) ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+        else ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        if (requestedOrientation != wanted) requestedOrientation = wanted
+        @Suppress("DEPRECATION")
+        val rotation = windowManager.defaultDisplay.rotation
+        val started = cameraRotation
+        if (started != null && started != rotation && backCapture == null) {
+            cameraRotation = null
+            startCamera()
+        }
+    }
+
     // Turns on the front camera and sends each frame to the face detector
     private fun startCamera() {
         val providerFuture = ProcessCameraProvider.getInstance(this)
@@ -774,6 +797,7 @@ class MainActivity : ComponentActivity() {
             cameraProvider = provider
             backCapture = null  // the front camera replaces it (unbindAll below)
             frontCapture = null
+            cameraRotation = null
             if (asleep && privacy) return@addListener
             val detector = FaceDetection.getClient(
                 FaceDetectorOptions.Builder()
@@ -789,6 +813,8 @@ class MainActivity : ComponentActivity() {
             provider.unbindAll()
             // Face tracking plus real photos when asked; if this phone can't do both at once,
             // just face tracking (looks then use a face-tracking frame)
+            @Suppress("DEPRECATION")
+            cameraRotation = windowManager.defaultDisplay.rotation
             frontCapture = try {
                 @Suppress("DEPRECATION")
                 val rotation = windowManager.defaultDisplay.rotation

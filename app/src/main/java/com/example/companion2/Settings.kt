@@ -181,6 +181,7 @@ class Settings(context: Context) {
     var tiltCenter by number("tiltCenter", 90f)       // tilt servo angle for straight ahead
     var flipPan by switch("flipPan", false)           // turns the wrong way
     var flipTilt by switch("flipTilt", false)         // tilts the wrong way
+    var glados by switch("glados", false)             // GLaDOS mode: hanging upside down (screen, cameras and neck turn over)
 
     // Little character touches
     var noticeThings by switch("noticeThings", false) // once a day, glance at you when you arrive
