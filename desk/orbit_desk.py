@@ -103,6 +103,28 @@ class State:
     nonces = {}          # {(device_id, nonce): time} of recent signed requests (no replays)
 
 
+_config_lock = threading.RLock()  # one change to the settings file at a time
+
+
+def tolerant_console():
+    """Never crash printing a character this window can't show (say, an agent's emoji in an older
+    Windows console): it's shown as ? instead."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
+def utf8_stdin():
+    """Agents send UTF-8 (MCP and hooks require it). Windows would read it in its own code page, so
+    "café" would arrive mangled, and some characters would stop the command."""
+    try:
+        sys.stdin.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError, OSError):
+        pass
+
+
 def read_config() -> dict:
     try:
         data = json.loads(CONFIG.read_text())
@@ -114,15 +136,23 @@ def read_config() -> dict:
 def write_config(data: dict):
     """Saves the settings file so only you can read it (it holds the keys of paired phones).
     Written to a new file first, then swapped in, so a crash can't leave half a file."""
-    temp = CONFIG.with_name(CONFIG.name + ".tmp")
-    fd = os.open(str(temp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        json.dump(data, f, indent=1)
-    try:
-        os.chmod(str(temp), 0o600)  # in case the file was already there with looser permissions
-    except OSError:
-        pass  # Windows: files in your home folder are already private to you
-    os.replace(str(temp), str(CONFIG))
+    with _config_lock:
+        temp = CONFIG.with_name(CONFIG.name + ".tmp")
+        fd = os.open(str(temp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=1)
+        try:
+            os.chmod(str(temp), 0o600)  # in case the file was already there with looser permissions
+        except OSError:
+            pass  # Windows: files in your home folder are already private to you
+        for attempt in range(10):
+            try:
+                os.replace(str(temp), str(CONFIG))
+                return
+            except PermissionError:  # Windows: something (often antivirus) has it open for a moment
+                if attempt == 9:
+                    raise
+                time.sleep(0.05)
 
 
 def load_code(new: bool) -> str:
@@ -148,6 +178,11 @@ def load_devices() -> dict:
 
 
 def save_device(device_id: str, secret: bytes):
+    with _config_lock:
+        _save_device(device_id, secret)
+
+
+def _save_device(device_id: str, secret: bytes):
     data = read_config()
     devices = data.get("devices") if isinstance(data.get("devices"), dict) else {}
     devices[device_id] = {"secret": base64.b64encode(secret).decode(),
@@ -157,10 +192,11 @@ def save_device(device_id: str, secret: bytes):
 
 
 def forget_devices() -> int:
-    data = read_config()
-    count = len(data.pop("devices", None) or {})
-    write_config(data)
-    return count
+    with _config_lock:
+        data = read_config()
+        count = len(data.pop("devices", None) or {})
+        write_config(data)
+        return count
 
 
 # ---- Pairing and encryption ----
@@ -834,6 +870,7 @@ def cmd_hook(argv) -> int:
     p.add_argument("json", nargs="?", default=None)
     a = p.parse_args(argv)
     raw = a.json
+    utf8_stdin()
     if raw is None and not sys.stdin.isatty():
         raw = sys.stdin.read(100_000)
     try:
@@ -963,6 +1000,7 @@ def cmd_mcp(argv) -> int:
     p.add_argument("--source", default="", help="name used when the agent doesn't give one")
     p.add_argument("--port", type=int, default=DEFAULT_PORT)
     a = p.parse_args(argv)
+    utf8_stdin()
     out = sys.stdout
     for line in sys.stdin:
         line = line.strip()
@@ -988,6 +1026,7 @@ COMMANDS = {"notify": cmd_notify, "express": cmd_express, "status": cmd_status,
 
 
 def main():
+    tolerant_console()
     if len(sys.argv) > 1 and sys.argv[1] in COMMANDS:
         sys.exit(COMMANDS[sys.argv[1]](sys.argv[2:]))
     sys.exit(serve(sys.argv[1:]))

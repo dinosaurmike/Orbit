@@ -147,6 +147,7 @@ class DeskTest(unittest.TestCase):
         desk.State.code = CODE
         desk.State.port = cls.port
         desk.WAIT_SECONDS = 1.0  # short waits keep the tests quick
+        desk.tolerant_console()  # so the suite passes on a computer whose window can't show "…"
         cls.server = desk.ThreadingHTTPServer(("0.0.0.0", cls.port), desk.Handler)
         cls.server.daemon_threads = True
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
@@ -547,6 +548,30 @@ class DeskTest(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("pip install cryptography", r.stdout)
         self.assertFalse(os.path.exists(os.path.join(self.home, ".orbit_desk.json.tmp")))
+
+    def test_agents_can_send_any_language_and_emoji(self):
+        # Like Windows: its own code page for the console, while agents send UTF-8
+        env = dict(os.environ, PYTHONIOENCODING="cp1252")
+        text = "Café build ✅ — 完成"
+        line = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
+            "name": "orbit_notify", "arguments": {"kind": "done", "message": text}}}, ensure_ascii=False)
+        r = subprocess.run([sys.executable, SCRIPT, "mcp", "--port", str(self.port)],
+                           input=(line + "\n").encode("utf-8"), capture_output=True, timeout=20, env=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(desk.State.events[-1]["message"], text)
+        hook = json.dumps({"hook_event_name": "Notification", "message": "Ça marche ✅"}, ensure_ascii=False)
+        r = subprocess.run([sys.executable, SCRIPT, "hook", "--source", "Claude Code", "--port", str(self.port)],
+                           input=hook.encode("utf-8"), capture_output=True, timeout=20, env=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Ça marche ✅", desk.State.events[-1]["message"])
+
+    def test_the_window_never_crashes_on_an_emoji(self):
+        env = dict(os.environ, PYTHONIOENCODING="ascii")
+        r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
+                            "import orbit_desk; orbit_desk.tolerant_console(); print('Build \\u2705 done\\u2026')", HERE],
+                           capture_output=True, timeout=20, env=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.strip(), b"Build ? done?")
 
     def test_loading_orbit_desk_doesnt_load_cryptography(self):
         r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
