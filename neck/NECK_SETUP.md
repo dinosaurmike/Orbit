@@ -89,6 +89,21 @@ is sagging: check the capacitor, the shared ground, and that the supply gives en
 6. Try the move buttons (Nod, Shake head, Happy, Sad, Curious, Look away).
 7. **Follow speed**, **Turn range** and the up/down limits tune how it moves.
 
+## Hanging upside down (GLaDOS mode)
+
+Orbit can hang from a shelf or the ceiling, head down, like GLaDOS. Set it up standing first
+(the steps above, including the flips), then:
+
+1. Settings → **Device** → switch on **GLaDOS mode**. The screen turns over so the eyes are the
+   right way up, the cameras follow, and the neck's turn and tilt swap to match. Your Flip turn
+   and Flip tilt settings stay as they are; don't change them.
+2. Hang it. Check **Look up** and **Look down** again: what it can reach may differ once it hangs.
+3. If it looks for your screen, run **Find my screen** again: hanging, it looks down first.
+
+Mount it with screws into something solid, add a second safety tether (a cord to a separate
+hook), and give the cable a loop so the plug never carries any weight. The servos hold the head
+against gravity all the time; a 5 V supply with spare current (2 A or more) keeps them steady.
+
 ## How it behaves
 
 * The eyes lead, the head follows: small moves are just the eyes; once you're clearly off to
